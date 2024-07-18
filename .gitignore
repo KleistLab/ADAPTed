@@ -1,0 +1,7 @@
+**__pycache__**
+**.pytest_cache**
+**ADAPTed.egg-info**
+**build**
+**.cpp
+**.so
+.*

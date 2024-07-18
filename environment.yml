@@ -1,0 +1,21 @@
+name: ADAPTed
+channels:
+  - conda-forge
+  - bioconda
+  - anaconda
+  - defaults
+dependencies:
+  - python=3.8
+  - pip
+  - pip:
+      - pod5
+      - vbz-h5py-plugin
+  - scipy
+  - bottleneck
+  - cython=0.29.36
+  - toml
+  - tqdm
+  - numpy=1.24.4
+  - pandas
+  - setuptools
+  - wheel
