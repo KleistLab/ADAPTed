@@ -116,7 +116,7 @@ parent_parser.add_argument(
     ),
 )
 
-parser.add_argument(
+parent_parser.add_argument(
     "--create_subdir",
     type=str2bool,
     default=True,
