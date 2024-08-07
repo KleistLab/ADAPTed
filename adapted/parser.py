@@ -32,11 +32,11 @@ def str2bool(v):
 
 
 parser = argparse.ArgumentParser(
-    prog="adapt",
+    prog="adapted",
     description=(
-        "***** ADAPT: Adapter and poly(A) Detection And Profiling Tool *****\n"
-        "ADAPT is designed to pinpoint DNA adapter sequences in raw dRNA-seq signals. "
-        "For command-specific help, run: `adapt <command> --help`."
+        "***** ADAPTed: Adapter and poly(A) Detection And Profiling Tool *****\n"
+        "ADAPTed is designed to pinpoint DNA adapter sequences in raw dRNA-seq signals. "
+        "For command-specific help, run: `adapted <command> --help`."
     ),
     formatter_class=RawTextHelpFormatter,
 )
@@ -176,7 +176,7 @@ def parse_args() -> Config:
 
     # create run dir
     if args.create_subdir:
-        run_dir_name = "adapt_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        run_dir_name = "adapted_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         run_dir = os.path.join(args.output, run_dir_name)
     else:
         run_dir = args.output
