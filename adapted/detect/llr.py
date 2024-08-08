@@ -49,9 +49,11 @@ class LLRBoundariesLog:
     adapter_end_too_close_to_trace_end: bool = False
     no_polya_end_found: bool = False
     refine_too_few_extrema: bool = False
+    refine_adapter_end_adjusted_within_atol: bool = False
     refine_polya_not_poi: bool = False
     refine_region_too_short: bool = False
     refine_possible_noisy_polya: bool = False
+    refine_adapter_end_adjusted: bool = False
 
     def to_string(self):
         return " ".join([f"{k}" for k, v in self.__dict__.items() if v])
@@ -237,6 +239,7 @@ def refine_boundaries(
 
     # adjust adapter start within atol window
     if local_max_poi_idx.size and local_max_poi_idx[0] < params.refine_polya_atol:
+        logger.refine_adapter_end_adjusted_within_atol = True
         adapter_end = adapter_end + local_max_poi_idx[0]
         # remove from index arrays
         poi_idx = poi_idx[poi_idx > local_max_poi_idx[0]]
@@ -305,6 +308,7 @@ def refine_boundaries(
                 - local_max_poi_before_first_local_min_poi_idx
                 >= params.min_obs_polya
             ):  # min length polya
+                logger.refine_adapter_end_adjusted = True
                 adapter_end = adapter_end + local_max_poi_before_first_local_min_poi_idx
 
     return adapter_end, polya_end, logger
