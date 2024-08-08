@@ -107,20 +107,16 @@ def combined_detect(
     boundaries = detect_boundaries(
         calibrated_signal[:full_signal_len], spc.llr_boundaries, llr_return_trace
     )
-    adapter_start = 0
-    polya_end = boundaries.polya_end
-    llr_adapter_end = boundaries.adapter_end
+    adapter_start = boundaries.adapter_start  # might be updated
+    polya_end = boundaries.polya_end  # might be updated
+    llr_adapter_end = boundaries.adapter_end  # for readibility
 
     llr_rel_adapter_end = (
         llr_adapter_end / full_signal_len
         if (full_signal_len is not None and full_signal_len > 0)
         else 0
     )
-    llr_trace = boundaries.trace  # for debug
-    llr_adapter_end_adjust = boundaries.adapter_end_adjust
-    llr_polya_end_adjust = boundaries.polya_end_adjust
 
-    polya_truncated = boundaries.polya_truncated
     success = True
     mvs_adapter_end = None
     adapter_end = None
@@ -343,12 +339,12 @@ def combined_detect(
         adapter_start=adapter_start,
         adapter_end=adapter_end,
         polya_end=polya_end,
-        polya_truncated=polya_truncated,
+        polya_truncated=boundaries.polya_truncated,
         llr_adapter_end=llr_adapter_end,
         llr_rel_adapter_end=llr_rel_adapter_end,
-        llr_trace=llr_trace,
-        llr_adapter_end_adjust=llr_adapter_end_adjust,
-        llr_polya_end_adjust=llr_polya_end_adjust,
+        llr_trace=boundaries.trace,  # can be empty
+        llr_adapter_end_adjust=boundaries.adapter_end_adjust,
+        llr_polya_end_adjust=boundaries.polya_end_adjust,
         mvs_llr_polya_end_adjust_ignored=mvs_llr_polya_end_adjust_ignored,
         mvs_llr_polya_end_to_early_stop=mvs_llr_polya_end_to_early_stop,
         mvs_adapter_end=mvs_adapter_end,
