@@ -147,7 +147,7 @@ def combined_detect(
         )
         adapter_mad = float(np.median(deviations))  # make type checker happy
 
-    if llr_adapter_end == 0:
+    if llr_adapter_end == 0 or llr_adapter_end is None:
         success = False
         fail_reason = "No adapter detected (ADAPT)"
 
@@ -161,11 +161,15 @@ def combined_detect(
     #     fail_reason = "Detected boundary too close to end of read"
 
     # catch llr_detect failure cases: initial stall and unexpected signal (e.g. high variance noise)
-    if adapter_mad and not in_range(adapter_mad, *spc.real_range.adapter_mad_range):
+    if (
+        success
+        and adapter_mad
+        and not in_range(adapter_mad, *spc.real_range.adapter_mad_range)
+    ):
         success = False
         fail_reason = "adapter MAD check failed"
 
-    if spc.real_range.detect_open_pores:
+    if success and spc.real_range.detect_open_pores:
         open_pores = find_open_pores(
             calibrated_signal[adapter_start:llr_adapter_end],
         ).ravel()
