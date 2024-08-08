@@ -305,8 +305,12 @@ def combined_detect(
                     # now, adapter_end might be > polya_end, especially if the polya was (incorrectly) refined
                     if adapter_end > polya_end:
                         polya_end = adapter_end
-                        if (boundaries.polya_end_adjust < 0) and (
-                            -boundaries.polya_end_adjust > (adapter_end - polya_end)
+                        if (
+                            (boundaries.polya_end_adjust is not None)
+                            and (boundaries.polya_end_adjust < 0)
+                            and (
+                                -boundaries.polya_end_adjust > (adapter_end - polya_end)
+                            )
                         ):
                             polya_end = polya_end - boundaries.polya_end_adjust
                             mvs_llr_polya_end_adjust_ignored = True
