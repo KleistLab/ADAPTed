@@ -137,6 +137,17 @@ class SigProcConfig(NestedConfig):
             else 0
         )
 
+    def update_sig_preload_size(self):
+        self.sig_preload_size = (
+            self.llr_boundaries.max_obs_trace
+            + (
+                self.mvs_polya.search_window
+                + max(self.mvs_polya.median_shift_window, self.mvs_polya.polyA_window)
+            )
+            if self.mvs_polya.mvs_detect_check
+            else 0
+        )
+
 
 def get_config(config_name: str) -> SigProcConfig:
     with pkg_resources.path(config_files, f"{config_name}.toml") as config_path:

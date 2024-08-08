@@ -207,6 +207,8 @@ def parse_args() -> Config:
     else:
         spc = SigProcConfig()  # TODO: default based on chemistry
 
+    spc.update_sig_preload_size()
+
     return Config(
         input=input_config,
         output=output_config,
