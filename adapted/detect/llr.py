@@ -37,14 +37,21 @@ class Boundaries:
     adapter_end_adjust: Optional[int] = None
     polya_end_adjust: Optional[int] = None
     trace: Optional[np.ndarray] = None
+    trace_early_stop_pos: Optional[int] = None
     logstr: Optional[str] = None
     polya_truncated: Optional[bool] = None
-    polya_trace_early_stop_pos: Optional[int] = None
 
 
 class LLRBoundariesLog:
     too_little_signal: bool = False
     no_adapter_end_found: bool = False
+    min_obs_adapter_first_candidate: bool = False
+    min_obs_adapter_only_candidate: bool = False
+    recalc_adapter_trace_with_start_offset: bool = False
+    recalc_adapter_trace_with_start_offset_too_short: bool = False
+    second_try_no_adapter_end_found: bool = False
+    second_try_min_obs_adapter_first_candidate: bool = False
+    second_try_min_obs_adapter_only_candidate: bool = False
     truncated_polya: bool = False
     adapter_end_too_close_to_trace_end: bool = False
     no_polya_end_found: bool = False
@@ -120,14 +127,76 @@ def detect_boundaries(
     if adapter_end_cands.size == 0:
         logger.no_adapter_end_found = True
         # give another try
-        adapter_end_cands = [np.argmax(trace.signal)]
+        adapter_end_cands = np.array([np.argmax(trace.signal)])
+
+    # handle error case where min_obs_adapter is selected as adapter end (interpolation artifact)
+    elif adapter_end_cands.size > 1 and adapter_end_cands[0] == params.min_obs_adapter:
+        logger.min_obs_adapter_first_candidate = True
+        adapter_end_cands = adapter_end_cands[1:]
+    # try again if only candidate is min_obs_adapter
+    elif adapter_end_cands.size == 1 and adapter_end_cands[0] == params.min_obs_adapter:
+        logger.min_obs_adapter_only_candidate = True
+        if (
+            norm_signal.size
+            - 2 * params.min_obs_adapter
+            - params.adapter_trace_tail_trim
+            < 0
+        ):
+            logger.recalc_adapter_trace_with_start_offset_too_short = True
+            results.logstr = logger.to_string()
+            return results
+
+        logger.recalc_adapter_trace_with_start_offset = True
+
+        trace: "LLRTrace" = calc_adapter_trace(
+            signal=norm_signal,
+            offset_head=params.min_obs_adapter,  # offset comes on top of start position
+            offset_tail=params.adapter_trace_tail_trim,
+            stride=params.adapter_trace_stride,
+            early_stop1_window=params.adapter_trace_early_stop_window,
+            early_stop1_stride=params.adapter_trace_early_stop_stride,
+            early_stop2_window=params.polya_trace_early_stop_window,
+            early_stop2_stride=params.polya_trace_early_stop_stride,
+            return_c_c2=True,
+            c=trace.c,
+            c2=trace.c2,
+            trace_start=params.min_obs_adapter,
+        )
+        results.trace = trace.signal if return_trace else np.array([])
+        trace.interp_start()
+
+        adapter_end_cands = adapter_end_from_trace(
+            trace,
+            prominence=params.adapter_peak_prominence,
+            rel_height=params.adapter_peak_rel_height,
+            width=params.adapter_peak_width,
+            fix_plateau=True,
+            correct_for_split_peaks=True,
+        )
+        if adapter_end_cands.size == 0:
+            logger.second_try_no_adapter_end_found = True
+            # give another try
+            adapter_end_cands = np.array([np.argmax(trace.signal)])
+        elif (
+            adapter_end_cands.size > 1
+            and adapter_end_cands[0] == params.min_obs_adapter
+        ):
+            logger.second_try_min_obs_adapter_first_candidate = True
+            adapter_end_cands = np.array([adapter_end_cands[1:]])
+        elif (
+            adapter_end_cands.size == 1
+            and adapter_end_cands[0] == params.min_obs_adapter
+        ):
+            logger.second_try_min_obs_adapter_only_candidate = True
+            results.logstr = logger.to_string()
+            return results
 
     results.adapter_end = int(adapter_end_cands[0])
     results.polya_end = int(trace.max_len_no_early_stop)
 
     # 3. if not early stop, return
     results.polya_truncated = not trace.early_stop
-    results.polya_trace_early_stop_pos = trace.end
+    results.trace_early_stop_pos = trace.end
 
     if results.polya_truncated:
         logger.truncated_polya = True

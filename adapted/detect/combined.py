@@ -58,6 +58,7 @@ class DetectResults:
     llr_trace: Optional[np.ndarray] = None
     llr_adapter_end_adjust: Optional[int] = None
     llr_polya_end_adjust: Optional[int] = None
+    llr_trace_early_stop_pos: Optional[int] = None
 
     mvs_llr_polya_end_adjust_ignored: Optional[bool] = None
     mvs_llr_polya_end_to_early_stop: Optional[bool] = None
@@ -315,7 +316,7 @@ def combined_detect(
                             polya_end = polya_end - boundaries.polya_end_adjust
                             mvs_llr_polya_end_adjust_ignored = True
                         elif not boundaries.polya_truncated:
-                            polya_end = boundaries.polya_trace_early_stop_pos
+                            polya_end = boundaries.trace_early_stop_pos
                             mvs_llr_polya_end_to_early_stop = True
 
             if spc.real_range.real_signal_check and success:
@@ -349,6 +350,7 @@ def combined_detect(
         llr_trace=boundaries.trace,  # can be empty
         llr_adapter_end_adjust=boundaries.adapter_end_adjust,
         llr_polya_end_adjust=boundaries.polya_end_adjust,
+        llr_trace_early_stop_pos=boundaries.trace_early_stop_pos,  # early stop position in trace, interesting for runtime performance
         mvs_llr_polya_end_adjust_ignored=mvs_llr_polya_end_adjust_ignored,
         mvs_llr_polya_end_to_early_stop=mvs_llr_polya_end_to_early_stop,
         mvs_adapter_end=mvs_adapter_end,

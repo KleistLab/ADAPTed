@@ -173,25 +173,20 @@ def _gains_w_polya_early_stop(DTYPE_INT_t start,
 	return gains
 
 
-
-
-def c_llr_trace(np.ndarray[DTYPE_t] raw_signal, 
-		  DTYPE_INT_t start, 
-		  DTYPE_INT_t end, 
-		  DTYPE_INT_t min_obs, 
-		  DTYPE_INT_t border_trim,
-		  DTYPE_INT_t stride = 1,
-		  DTYPE_INT_t adapter_early_stopping = 0,
-		  DTYPE_INT_t adapter_early_stop_window = 500,
-		  DTYPE_INT_t adapter_early_stop_stride = 100,
-		  DTYPE_INT_t polya_early_stopping = 0,
-		  DTYPE_INT_t polya_early_stop_window = 50,
-		  DTYPE_INT_t polya_early_stop_stride = 10,
-		  DTYPE_INT_t return_c_c2 = 0):
-
-	cdef np.ndarray[DTYPE_t] c = np.cumsum( raw_signal )
-	cdef np.ndarray[DTYPE_t] c2 = np.cumsum( np.multiply( raw_signal, raw_signal ) )
-
+def c_llr_trace_gains(np.ndarray[DTYPE_t] c,
+	np.ndarray[DTYPE_t] c2,
+	DTYPE_INT_t start,
+	DTYPE_INT_t end,
+	DTYPE_INT_t min_obs,
+	DTYPE_INT_t border_trim,
+	DTYPE_INT_t stride = 1,
+	DTYPE_INT_t adapter_early_stopping = 0,
+	DTYPE_INT_t adapter_early_stop_window = 500,
+	DTYPE_INT_t adapter_early_stop_stride = 100,
+	DTYPE_INT_t polya_early_stopping = 0,
+	DTYPE_INT_t polya_early_stop_window = 50,
+	DTYPE_INT_t polya_early_stop_stride = 10,
+):
 	cdef np.ndarray[DTYPE_t] gain
 
 	if polya_early_stopping > 0:
@@ -200,6 +195,40 @@ def c_llr_trace(np.ndarray[DTYPE_t] raw_signal,
 		gain = _gains_w_early_stop(start, end, c, c2, min_obs, border_trim, stride, adapter_early_stop_window, adapter_early_stop_stride)
 	else:
 		gain = _gains(start, end, c, c2, min_obs, border_trim, stride)
+
+	return gain
+
+
+def c_llr_trace(np.ndarray[DTYPE_t] raw_signal,
+	DTYPE_INT_t start,
+	DTYPE_INT_t end,
+	DTYPE_INT_t min_obs,
+	DTYPE_INT_t border_trim,
+	DTYPE_INT_t stride = 1,
+	DTYPE_INT_t adapter_early_stopping = 0,
+	DTYPE_INT_t adapter_early_stop_window = 500,
+	DTYPE_INT_t adapter_early_stop_stride = 100,
+	DTYPE_INT_t polya_early_stopping = 0,
+	DTYPE_INT_t polya_early_stop_window = 50,
+	DTYPE_INT_t polya_early_stop_stride = 10,
+	DTYPE_INT_t return_c_c2 = 0):
+
+	cdef np.ndarray[DTYPE_t] c = np.cumsum( raw_signal )
+	cdef np.ndarray[DTYPE_t] c2 = np.cumsum( np.multiply( raw_signal, raw_signal ) )
+
+	cdef np.ndarray[DTYPE_t] gain = c_llr_trace_gains(c, 
+													c2, 
+													start, 
+													end, 
+													min_obs, 
+													border_trim, 
+													stride, 
+													adapter_early_stopping, 
+													adapter_early_stop_window, 
+													adapter_early_stop_stride, 
+													polya_early_stopping, 
+													polya_early_stop_window, 
+													polya_early_stop_stride)
 
 	if return_c_c2:
 		return gain, c, c2

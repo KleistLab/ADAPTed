@@ -17,7 +17,7 @@ pyximport.install(setup_args={"include_dirs": np.get_include()})
 from attrs import define, field
 from scipy.signal import find_peaks
 
-from adapted.detect._c_llr import _gains, c_llr_trace
+from adapted.detect._c_llr import _gains, c_llr_trace, c_llr_trace_gains
 
 
 @define
@@ -25,6 +25,7 @@ class LLRTrace:
     signal: np.ndarray = field(kw_only=True)
     c: Optional[np.ndarray] = field(default=None, kw_only=True)
     c2: Optional[np.ndarray] = field(default=None, kw_only=True)
+    trace_start: int = field(default=0, kw_only=True)
 
     stride: int = field(kw_only=True)
     min_obs: int = field(kw_only=True)
@@ -234,32 +235,65 @@ def calc_adapter_trace(
     early_stop2_window: int,
     early_stop2_stride: int,
     return_c_c2: bool,
+    trace_start: int = 0,
+    c: Optional[np.ndarray] = None,
+    c2: Optional[np.ndarray] = None,
 ) -> LLRTrace:
-    res = c_llr_trace(
-        signal.astype(np.float64),
-        0,
-        signal.size - 1,
-        offset_head,
-        offset_tail,
-        stride,
-        0,
-        early_stop1_window,
-        early_stop1_stride,
-        1,
-        early_stop2_window,
-        early_stop2_stride,
-        int(return_c_c2),
-    )
-    if return_c_c2:
-        llr_trace, c, c2 = res
+    # check if c and c2 are provided, they either need to be both there or not
+    if (c is not None) != (c2 is not None):
+        raise ValueError("c and c2 need to be both provided or not provided")
+    # if c and c2 are provided, check if they have the correct size
+    if c is not None and c2 is not None:
+        if c.size != c2.size:
+            raise ValueError("c and c2 need to have the same size")
+        if c.size != signal.size:
+            raise ValueError("c and c2 need to have the same size as signal")
+
+        llr_trace = c_llr_trace_gains(
+            c=c.astype(np.float64),
+            c2=c2.astype(np.float64),
+            start=trace_start,
+            end=signal.size - 1,
+            min_obs=offset_head,
+            border_trim=offset_tail,
+            stride=stride,
+            adapter_early_stopping=0,
+            adapter_early_stop_window=early_stop1_window,
+            adapter_early_stop_stride=early_stop1_stride,
+            polya_early_stopping=1,
+            polya_early_stop_window=early_stop2_window,
+            polya_early_stop_stride=early_stop2_stride,
+        )
+        if not return_c_c2:
+            c, c2 = None, None
+
     else:
-        llr_trace = res
-        c, c2 = None, None
+        res = c_llr_trace(
+            signal.astype(np.float64),
+            trace_start,
+            signal.size - 1,
+            offset_head,
+            offset_tail,
+            stride,
+            0,
+            early_stop1_window,
+            early_stop1_stride,
+            1,
+            early_stop2_window,
+            early_stop2_stride,
+            int(return_c_c2),
+        )
+        if return_c_c2:
+            llr_trace, c, c2 = res
+        else:
+            llr_trace = res
+            c, c2 = None, None
 
     return LLRTrace(
         signal=llr_trace,
         c=c,
         c2=c2,
+        trace_start=trace_start,
         stride=stride,
         min_obs=offset_head,
         tail_trim=offset_tail,
