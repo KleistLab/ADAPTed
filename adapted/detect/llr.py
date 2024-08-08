@@ -43,15 +43,15 @@ class Boundaries:
 
 
 class LLRBoundariesLog:
-    too_little_signal: Optional[bool] = None
-    no_adapter_end_found: Optional[bool] = None
-    adapter_end_too_close_to_trace_end: Optional[bool] = None
-    truncated_polya: Optional[bool] = None
-    no_polya_end_found: Optional[bool] = None
-    refine_too_few_extrema: Optional[bool] = None
-    refine_polya_not_poi: Optional[bool] = None
-    refine_region_too_short: Optional[bool] = None
-    refine_possible_noisy_polya: Optional[bool] = None
+    too_little_signal: bool = False
+    no_adapter_end_found: bool = False
+    truncated_polya: bool = False
+    adapter_end_too_close_to_trace_end: bool = False
+    no_polya_end_found: bool = False
+    refine_too_few_extrema: bool = False
+    refine_polya_not_poi: bool = False
+    refine_region_too_short: bool = False
+    refine_possible_noisy_polya: bool = False
 
     def to_string(self):
         return " ".join([f"{k}" for k, v in self.__dict__.items() if v])
