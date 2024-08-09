@@ -158,7 +158,7 @@ def combined_detect(
         success = False
         fail_reason = "No adapter detected (ADAPT)"
 
-    elif polya_end == 0:
+    elif polya_end == 0 or polya_end is None:
         success = False
         fail_reason = "No polya detected (ADAPT)"
 
