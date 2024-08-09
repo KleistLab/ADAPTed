@@ -336,7 +336,11 @@ def combined_detect(
                     fail_reason = "Real signal check failed"
 
     partitions = calc_partitions_from_vals(
-        calibrated_signal[:full_signal_len], adapter_start, adapter_end, polya_end
+        calibrated_signal[:full_signal_len],
+        adapter_start,
+        adapter_end,
+        polya_end,
+        polya_truncated=boundaries.polya_truncated,
     )
 
     detect_res = DetectResults(

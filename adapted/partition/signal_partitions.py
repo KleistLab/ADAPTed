@@ -16,12 +16,12 @@ from adapted.detect.llr import Boundaries
 
 @dataclass
 class Partition:
-    start: int
-    len: int
-    mean: float
-    std: float
-    med: float
-    mad: float
+    start: Optional[int]
+    len: Optional[int]
+    mean: Optional[float]
+    std: Optional[float]
+    med: Optional[float]
+    mad: Optional[float]
 
     def to_dict(self, name: str = ""):
         prefix = name + "_" if name else ""
@@ -67,21 +67,22 @@ def calc_partitions_from_vals(
     adapter_start: Optional[int],
     adapter_end: Optional[int],
     polya_end: Optional[int],
+    polya_truncated: Optional[bool] = False,
 ) -> Partitions:
     adapter = calc_partition_stats(signal, adapter_start, adapter_end)
     polya = calc_partition_stats(signal, adapter_end, polya_end)
-    rna = calc_partition_stats(signal, polya_end, signal.size)
+    if not polya_truncated:
+        rna = calc_partition_stats(signal, polya_end, signal.size)
+    else:
+        rna = Partition(None, None, None, None, None, None)
     return Partitions(adapter, polya, rna)
 
 
 def calc_partition_stats(
     signal: np.ndarray, start: Optional[int], end: Optional[int]
 ) -> Partition:
-    if start is None or end is None:
-        start = 0 if start is None else start
-        return Partition(start, 0, 0, 0, 0, 0)
-    elif end <= start:
-        return Partition(start, 0, 0, 0, 0, 0)
+    if start is None or end is None or end <= start:
+        return Partition(start, None, None, None, None, None)
 
     length = end - start
     signal_mean = float(np.mean(signal[start:end]))
