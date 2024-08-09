@@ -245,7 +245,7 @@ def process_in_batches(
                         file_obj,
                         batch_of_read_ids,
                         max_obs=config.sig_proc.sig_preload_size,
-                    )
+                    )  # sig_data = signals, in_arr_lengths, full_lengths, read_ids
 
                     return executor.submit(
                         task,
