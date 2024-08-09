@@ -29,6 +29,9 @@ from copy import deepcopy
 class DetectResults:
     success: bool
 
+    read_length: Optional[int] = None
+    preloaded: Optional[int] = None
+
     adapter_start: Optional[int] = None
     adapter_end: Optional[int] = None
     adapter_len: Optional[int] = None
@@ -46,12 +49,12 @@ class DetectResults:
     polya_mad: Optional[float] = None
     polya_truncated: Optional[bool] = None
 
-    rna_start: Optional[int] = None
-    rna_len: Optional[int] = None
-    rna_mean: Optional[float] = None
-    rna_std: Optional[float] = None
-    rna_med: Optional[float] = None
-    rna_mad: Optional[float] = None
+    rna_preloaded_start: Optional[int] = None
+    rna_preloaded_len: Optional[int] = None
+    rna_preloaded_mean: Optional[float] = None
+    rna_preloaded_std: Optional[float] = None
+    rna_preloaded_med: Optional[float] = None
+    rna_preloaded_mad: Optional[float] = None
 
     llr_adapter_end: Optional[int] = None
     llr_rel_adapter_end: Optional[float] = None
@@ -84,8 +87,8 @@ class DetectResults:
             **self.__dict__,
         }
 
-    def update(self, partitions: Partitions):
-        self.__dict__.update(partitions.to_dict())
+    def update(self, d: dict):
+        self.__dict__.update(d)
 
 
 ##############################
@@ -346,7 +349,8 @@ def combined_detect(
 
     detect_res = DetectResults(
         success=success,
-        adapter_start=adapter_start,
+        read_length=full_signal_len,
+        preloaded=calibrated_signal[:full_signal_len].size,
         adapter_end=adapter_end,
         polya_end=polya_end,
         polya_truncated=boundaries.polya_truncated,
@@ -367,12 +371,12 @@ def combined_detect(
         real_adapter_mean_start=real_adapter_mean_start,
         real_adapter_mean_end=real_adapter_mean_end,
         real_adapter_local_range=real_adapter_local_range,
-        adapter_med=adapter_med,
-        adapter_mad=adapter_mad,
         open_pores=open_pores,
         fail_reason=fail_reason,
         llr_detect_log=boundaries.logstr,
+        **partitions.adapter.to_dict("adapter"),  # start,len,mean,std,med,mad
+        **partitions.polya.to_dict("polya"),  # start,len,mean,std,med,mad
+        **partitions.rna.to_dict("rna_preloaded"),  # start,len,mean,std,med,mad
     )
 
-    detect_res.update(partitions)
     return detect_res
