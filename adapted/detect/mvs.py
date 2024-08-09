@@ -276,7 +276,7 @@ def mean_var_shift_polyA_detect_at_loc(
 
     med_shift = np.median(
         calibrated_signal[loc_ : min(loc_ + params.median_shift_window, sig_size)]
-    ) - np.median(calibrated_signal[max(loc_ - params.median_shift_window, 0) : loc_])
+    ) - np.median(calibrated_signal[:loc_])
 
     return_polya_med = float(polya_med)
     return_polya_local_range_ = float(polya_local_range_)
