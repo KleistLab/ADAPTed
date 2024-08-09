@@ -40,6 +40,7 @@ class Boundaries:
     trace_early_stop_pos: Optional[int] = None
     logstr: Optional[str] = None
     polya_truncated: Optional[bool] = None
+    debug_logger: Optional[dict] = None
 
 
 class LLRBoundariesLog:
@@ -70,6 +71,7 @@ def detect_boundaries(
     signal_pa: np.ndarray,
     params: LLRBoundariesConfig,
     return_trace: bool = False,
+    debug: bool = False,
 ) -> Boundaries:
     """signal should be clipped at max length"""
 
@@ -83,6 +85,11 @@ def detect_boundaries(
         logstr="",
     )
 
+    debug_logger = {}
+    debug_logger["params"] = params
+    debug_logger["signal_pa_size"] = signal_pa.size
+    debug_logger["max_obs_trace"] = params.max_obs_trace
+
     if (
         signal_pa.size
         <= params.min_obs_adapter
@@ -91,6 +98,7 @@ def detect_boundaries(
     ):
         logger.too_little_signal = True
         results.logstr = logger.to_string()
+        results.debug_logger = debug_logger if debug else None
         return results
 
     norm_signal = normalize_signal(
@@ -111,6 +119,18 @@ def detect_boundaries(
         early_stop2_stride=params.polya_trace_early_stop_stride,
         return_c_c2=True,
     )
+    debug_logger["trace_len"] = trace.signal.size
+    debug_logger["trace_max_len_no_early_stop"] = trace.max_len_no_early_stop
+    debug_logger["trace_early_stop"] = trace.early_stop
+    debug_logger["trace_end"] = trace.end
+    debug_logger["trace_start"] = trace.start
+    debug_logger["trace_stride"] = trace.stride
+    debug_logger["trace_min_obs"] = trace.min_obs
+    debug_logger["trace_tail_trim"] = trace.tail_trim
+    debug_logger["trace_start"] = trace.start
+    debug_logger["trace_end"] = trace.end
+    debug_logger["trace_early_stop"] = trace.early_stop
+
     results.trace = trace.signal if return_trace else np.array([])
     trace.interp_start()
 
@@ -123,6 +143,7 @@ def detect_boundaries(
         fix_plateau=True,
         correct_for_split_peaks=True,
     )
+    debug_logger["adapter_end_cands"] = adapter_end_cands
 
     if adapter_end_cands.size == 0:
         logger.no_adapter_end_found = True
@@ -144,9 +165,11 @@ def detect_boundaries(
         ):
             logger.recalc_adapter_trace_with_start_offset_too_short = True
             results.logstr = logger.to_string()
+            results.debug_logger = debug_logger if debug else None
             return results
 
         logger.recalc_adapter_trace_with_start_offset = True
+        debug_logger["recalc_adapter_trace_with_start_offset"] = True
 
         trace: "LLRTrace" = calc_adapter_trace(
             signal=norm_signal,
@@ -162,6 +185,18 @@ def detect_boundaries(
             c2=trace.c2,
             trace_start=params.min_obs_adapter,
         )
+        debug_logger["trace2_len"] = trace.signal.size
+        debug_logger["trace2_max_len_no_early_stop"] = trace.max_len_no_early_stop
+        debug_logger["trace2_early_stop"] = trace.early_stop
+        debug_logger["trace2_end"] = trace.end
+        debug_logger["trace2_start"] = trace.start
+        debug_logger["trace2_stride"] = trace.stride
+        debug_logger["trace2_min_obs"] = trace.min_obs
+        debug_logger["trace2_tail_trim"] = trace.tail_trim
+        debug_logger["trace2_start"] = trace.start
+        debug_logger["trace2_end"] = trace.end
+        debug_logger["trace2_early_stop"] = trace.early_stop
+
         results.trace = trace.signal if return_trace else np.array([])
         trace.interp_start()
 
@@ -173,6 +208,8 @@ def detect_boundaries(
             fix_plateau=True,
             correct_for_split_peaks=True,
         )
+        debug_logger["adapter_end_cands2"] = adapter_end_cands
+
         if adapter_end_cands.size == 0:
             logger.second_try_no_adapter_end_found = True
             # give another try
@@ -189,18 +226,24 @@ def detect_boundaries(
         ):
             logger.second_try_min_obs_adapter_only_candidate = True
             results.logstr = logger.to_string()
+            results.debug_logger = debug_logger if debug else None
             return results
 
     results.adapter_end = int(adapter_end_cands[0])
     results.polya_end = int(trace.max_len_no_early_stop)
+    debug_logger["adapter_end"] = results.adapter_end
+    debug_logger["polya_end"] = results.polya_end
 
     # 3. if not early stop, return
     results.polya_truncated = not trace.early_stop
     results.trace_early_stop_pos = trace.end
+    debug_logger["polya_truncated"] = results.polya_truncated
+    debug_logger["trace_early_stop_pos"] = results.trace_early_stop_pos
 
     if results.polya_truncated:
         logger.truncated_polya = True
         results.logstr = logger.to_string()
+        results.debug_logger = debug_logger if debug else None
         return results
 
     # 4. find polya_end
@@ -210,6 +253,7 @@ def detect_boundaries(
     if trace.end - results.adapter_end < params.min_obs_polya:
         logger.adapter_end_too_close_to_trace_end = True
         results.logstr = logger.to_string()
+        results.debug_logger = debug_logger if debug else None
         return results
 
     assert trace.c is not None and trace.c2 is not None  # make type checker happy
@@ -231,6 +275,7 @@ def detect_boundaries(
         prominence=params.polya_peak_prominence,
         rel_height=params.polya_peak_rel_height,
     )
+    debug_logger["polya_end_cands"] = polya_end_cands
 
     if polya_end_cands.size == 0:
         logger.no_polya_end_found = True
@@ -238,6 +283,7 @@ def detect_boundaries(
         polya_end_cands = [np.argmax(polya_trace.signal)]
 
     results.polya_end = int(polya_end_cands[0])
+    debug_logger["polya_end"] = results.polya_end
 
     # 5.refine adapter end and polya end
     prev_adapter_end = results.adapter_end
@@ -246,12 +292,14 @@ def detect_boundaries(
     results.adapter_end, results.polya_end, logger = refine_boundaries(
         norm_signal, results.adapter_end, results.polya_end, params, logger
     )  # TODO: test if using norm_signal here is a problem
+    debug_logger["adapter_end"] = results.adapter_end
+    debug_logger["polya_end"] = results.polya_end
     results.adapter_end_adjust = results.adapter_end - prev_adapter_end
     results.polya_end_adjust = results.polya_end - prev_polya_end
 
     # 6. return adapter end, polya end
     results.logstr = logger.to_string()
-
+    results.debug_logger = debug_logger if debug else None
     return results
 
 
