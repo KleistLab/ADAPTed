@@ -109,6 +109,10 @@ def combined_detect(
         calibrated_signal[:full_signal_len], spc.llr_boundaries, llr_return_trace
     )
     adapter_start = boundaries.adapter_start  # might be updated
+    adapter_end = (
+        boundaries.adapter_end
+    )  # might be updated TODO: check if default != None causes issues here
+
     polya_end = boundaries.polya_end  # might be updated
     llr_adapter_end = boundaries.adapter_end  # for readibility
 
@@ -120,7 +124,6 @@ def combined_detect(
 
     success = True
     mvs_adapter_end = None
-    adapter_end = None
     fail_reason = None
 
     mvs_detect_mean_at_loc = None
@@ -185,8 +188,6 @@ def combined_detect(
                 fail_reason = "Open pore too close to boundary"
 
     if success:
-        adapter_end = llr_adapter_end
-
         if spc.real_range.real_signal_check or spc.mvs_polya.mvs_detect_check:
             norm_signal = mad_winsor(
                 calibrated_signal[:full_signal_len],
