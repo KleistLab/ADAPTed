@@ -3,7 +3,16 @@ from Cython.Build import cythonize
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
-VERSION = "0.2.0"
+import re
+
+VERSIONFILE = "adapted/_version.py"
+verstrline = open(VERSIONFILE, "rt").read()
+VSRE = r"^__version__ = ['\"]([^'\"]*)['\"]"
+mo = re.search(VSRE, verstrline, re.M)
+if mo:
+    verstr = mo.group(1)
+else:
+    raise RuntimeError("Unable to find version string in %s." % (VERSIONFILE,))
 
 ext_modules = [
     Extension(
@@ -21,7 +30,7 @@ for e in ext_modules:
 
 setup(
     name="ADAPTed",
-    version=VERSION,
+    version=verstr,
     packages=["adapted"],
     install_requires=[
         "numpy",
