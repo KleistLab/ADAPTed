@@ -19,3 +19,4 @@ dependencies:
   - pandas
   - setuptools
   - wheel
+  - attrs
