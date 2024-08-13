@@ -16,7 +16,7 @@ import pandas as pd
 from adapted.config.base import load_nested_config_from_file
 from adapted.config.config import Config
 from adapted.config.file_proc import BatchConfig, InputConfig, OutputConfig, TaskConfig
-from adapted.config.sig_proc import SigProcConfig
+from adapted.config.sig_proc import SigProcConfig, chemistry_specific_config
 from adapted.io_utils import input_to_filelist
 
 from adapted._version import __version__
@@ -66,8 +66,14 @@ parent_parser.add_argument(
 parent_parser.add_argument(
     "--config",
     type=str,
-    default=None,
-    help="Path to a valid configuration toml to use. Default is None.",
+    help="Path to a valid configuration toml to use. See adapted/config/config_files/ for options.",
+)
+
+parent_parser.add_argument(
+    "--chemistry",
+    type=str,
+    choices=["RNA002", "RNA004"],
+    help="Specify the chemistry to use. If provided, --config is not required and will be ignored if both are provided.",
 )
 
 parent_parser.add_argument(
@@ -171,6 +177,9 @@ parser_detect.add_argument(
 def parse_args() -> Config:
     args = parser.parse_args()
 
+    if not args.config and not args.chemistry:
+        parser.error("Either --config or --chemistry must be provided.")
+
     read_ids = []
     if args.read_id_csv:
         read_ids = pd.read_csv(
@@ -220,10 +229,12 @@ def parse_args() -> Config:
         save_llr_trace=args.save_llr_trace,
     )
 
-    if args.config:
+    if args.config:  # when config is provided, chemistry is ignored
         spc = load_nested_config_from_file(args.config, SigProcConfig)
     else:
-        spc = SigProcConfig()  # TODO: default based on chemistry
+        spc = chemistry_specific_config(
+            chemistry=args.chemistry
+        )  # Use chemistry if config is not provided
 
     if args.max_obs_trace:
         spc.llr_boundaries.max_obs_trace = args.max_obs_trace
