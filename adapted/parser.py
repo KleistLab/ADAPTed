@@ -140,6 +140,17 @@ parser_detect.add_argument(
     help="Save the LLR trace for each read.",
 )
 
+parser_detect.add_argument(
+    "--max_obs_trace",
+    type=int,
+    default=None,
+    help=(
+        "Maximum number of observation to search for the adapter and poly(A) boundaries. "
+        "Setting this argument overrides the default value in the configuration file. "
+        "Use this with a large value for rerunning the detection of truncated reads. Default is None."
+    ),
+)
+
 
 # # Future feature
 # parser_trim = subparsers.add_parser(
@@ -206,6 +217,9 @@ def parse_args() -> Config:
         spc = load_nested_config_from_file(args.config, SigProcConfig)
     else:
         spc = SigProcConfig()  # TODO: default based on chemistry
+
+    if args.max_obs_trace:
+        spc.llr_boundaries.max_obs_trace = args.max_obs_trace
 
     spc.update_sig_preload_size()
 
