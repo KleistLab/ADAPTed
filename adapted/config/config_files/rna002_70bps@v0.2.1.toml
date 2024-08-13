@@ -2,11 +2,11 @@
 sig_norm_winsor_window = 5
 sig_norm_outlier_thresh = 5.0
 
-min_obs_adapter = 2500
-max_obs_trace = 8000
+min_obs_adapter = 2000
+max_obs_trace = 12000
 
 adapter_trace_tail_trim = 5
-adapter_trace_stride = 40
+adapter_trace_stride = 50
 
 min_obs_polya = 100
 
@@ -14,9 +14,9 @@ polya_trace_start = 40
 polya_trace_stride = 10
 
 adapter_trace_early_stop_window = 2000
-adapter_trace_early_stop_stride = 1000
+adapter_trace_early_stop_stride = 500
 polya_trace_early_stop_window = 200
-polya_trace_early_stop_stride = 40
+polya_trace_early_stop_stride = 50
 
 adapter_peak_prominence = 1.0
 adapter_peak_rel_height = 1.0
@@ -28,6 +28,7 @@ polya_peak_width = 50
 
 refine_polya_atol = 20
 refine_smooth_sigma = 10
+refine_max_adapter_end_adjust = 250
 
 [mvs_polya]
 mvs_detect_check = true
@@ -40,7 +41,7 @@ median_shift_range = [5.0, inf]
 median_shift_window = 1000
 polyA_window = 100                           # should reflect llr min_obs_polya
 polyA_med_range = [-inf, inf]
-polyA_local_range = [0.0, 10.0]
+polyA_local_range = [0.0, 12.0]
 pA_mean_adapter_med_scale_range = [1.3, inf]
 
 [real_range]

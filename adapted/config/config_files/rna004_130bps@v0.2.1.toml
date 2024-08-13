@@ -30,6 +30,7 @@ polya_peak_width = 50
 
 refine_polya_atol = 20
 refine_smooth_sigma = 10
+refine_max_adapter_end_adjust = 250
 
 [mvs_polya]
 mvs_detect_check = true
