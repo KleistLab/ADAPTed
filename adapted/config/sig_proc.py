@@ -13,6 +13,8 @@ from typing import Optional, Tuple
 from adapted.config import config_files
 from adapted.config.base import BaseConfig, NestedConfig, load_nested_config_from_file
 
+from adapted._version import __version__
+
 
 @dataclass
 class LLRBoundariesConfig(BaseConfig):
@@ -155,3 +157,17 @@ class SigProcConfig(NestedConfig):
 def get_config(config_name: str) -> SigProcConfig:
     with pkg_resources.path(config_files, f"{config_name}.toml") as config_path:
         return load_nested_config_from_file(config_path, SigProcConfig)
+
+
+def chemistry_specific_config(
+    chemistry: str, version: Optional[str] = None
+) -> SigProcConfig:
+    if chemistry.lower() not in ["rna002", "rna004"]:
+        raise ValueError(f"Unknown chemistry: {chemistry}")
+    if version is None:
+        version = __version__
+
+    speed = config_files.speeds[chemistry.lower()]
+
+    config_name = f"{chemistry.lower()}_{speed}@v{version}"
+    return get_config(config_name)
