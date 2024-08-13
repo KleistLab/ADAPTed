@@ -1,6 +1,6 @@
+from setuptools import find_packages, Extension, setup
 import numpy as np
 from Cython.Build import cythonize
-from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
 
 import re
@@ -31,7 +31,7 @@ for e in ext_modules:
 setup(
     name="ADAPTed",
     version=verstr,
-    packages=["adapted"],
+    packages=find_packages(),
     install_requires=[
         "numpy",
         "pandas",
