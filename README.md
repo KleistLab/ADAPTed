@@ -28,10 +28,10 @@ pip install .
 You can use ADAPTed by running the following command:
 
 ```
-adapted detect --input INPUT [INPUT ...] --output OUTPUT --config CONFIG
+adapted detect --input INPUT [INPUT ...] --output OUTPUT --chemistry CHEMISTRY
 ```
 
-Where `input` contains the pod5 files/directories to process, `output` specifies the location to create the output folder, and `config` points to a valid config TOML file (see `adapted/config/config_files/` for examples).
+Where `input` contains the pod5 files/directories to process, `output` specifies the location to create the output folder, and `chemistry` is 'RNA002' or 'RNA004'. Specifying the chemistry automatically selects the latest config file for that chemistry (ADAPTed currently supports `rna002_70bs` or `rna004_130bps`). Alternatively, you can specify a custom config TOML using the `--config` flag (see `adapted/config/config_files/` for examples).
 
 For additional options, see `adapted --help` and `adapted detect --help`.
 
@@ -46,6 +46,9 @@ Reads for which no adapter was detected, are described in the 'failed_reads_XX.c
 
 These files contain the following columns:
 
+- `read_id` : the read ID of the read.
+- `read_length` : the length of the read, in number of samples in the raw signal.
+- `preloaded` : the length of the preloaded signal, in number of samples in the raw signal.
 - `adapter_start` : the start coordinate of the adapter signal in the raw signal.
 - `adapter_end` : the end coordinate of the adapter signal, in the raw signal.
 - `adapter_len` : the length of the adapter signal, in number of samples in the raw signal.
@@ -60,17 +63,20 @@ These files contain the following columns:
 - `polya_std` : the standard deviation of the poly(A) signal, in pico amperes.
 - `polya_med` : the median of the poly(A) signal, in pico amperes.
 - `polya_mad` : the median absolute deviation of the poly(A) signal, in pico amperes.
-- `polya_truncated` : whether the poly(A) signal was truncated by the signal preload logic during detection. See [Signal preloading](#signal-preloading) for more details.
-- `rna_start` : the start coordinate of the RNA signal in the raw signal.
-- `rna_len` : the length of the (preloaded) RNA signal, in number of samples in the raw signal. This is the length of the preloaded RNA signal, which may be vastly shorter than the full read length.
-- `rna_mean` : the mean of the (preloaded) RNA signal, in pico amperes.
-- `rna_std` : the standard deviation of the (preloaded) RNA signal, in pico amperes.
-- `rna_med` : the median of the (preloaded) RNA signal, in pico amperes.
-- `rna_mad` : the median absolute deviation of the (preloaded) RNA signal, in pico amperes.
+- `polya_truncated` : whether the poly(A) signal was truncated by the signal preload logic during detection. See [Signal preloading](#signal-preloading) for more details. When the poly(A) signal stats are of interest, consider rerunning these reads with a larger `--max_obs_trace`.
+- `rna_preloaded_start` : the start coordinate of the RNA signal in the raw signal.
+- `rna_preloaded_len` : the length of the (preloaded) RNA signal, in number of samples in the raw signal. This is the length of the preloaded RNA signal, which may be vastly shorter than the full read length.
+- `rna_preloaded_mean` : the mean of the (preloaded) RNA signal, in pico amperes.
+- `rna_preloaded_std` : the standard deviation of the (preloaded) RNA signal, in pico amperes.
+- `rna_preloaded_med` : the median of the (preloaded) RNA signal, in pico amperes.
+- `rna_preloaded_mad` : the median absolute deviation of the (preloaded) RNA signal, in pico amperes.
 - `llr_adapter_end` : the log likelihood ratio-detected end coordinate of the adapter signal.
 - `llr_rel_adapter_end` : the relative coordinate (relative to the FULL read length) of the log likelihood ratio-detected end of the adapter signal.
 - `llr_adapter_end_adjust` : adjustments to the adapter end coordinate, made in llr refinement.
 - `llr_polya_end_adjust` : adjustments to the poly(A) end coordinate, made in llr refinement.
+- `llr_early_stop_pos` : the position of the trace calculation early stop in the raw signal, compare to `llr_adapter_end` and `preloaded` for run time performance analysis (closer to `llr_adapter_end` is better).
+- `mvs_llr_polya_end_adjust_ignored` : whether the poly(A) end adjust during llr refinementwas ignored in the mean-variance-shift method.
+- `mvs_llr_polya_end_to_early_stop` : if `mvs_overwrite` is `True` if can happen that the detected adapter end is downstream of the (incorrectly refined) polya-end, in that case, the polya-end is set to the `llr_early_stop_pos`. It may be wise to filter out such reads.
 - `mvs_adapter_end` : the end coordinate of the adapter signal, as detected or validated using the mean-variance-shift method.
 - `mvs_detect_mean_at_loc` : the local mean of the poly(A) signal.
 - `mvs_detect_var_at_loc` : the local variance of the poly(A) signal.
@@ -82,17 +88,17 @@ These files contain the following columns:
 - `real_adapter_local_range` : the local range of the adapter signal.
 - `open_pores` : the detected open pore events in the adapter signal.
 - `llr_detect_log` : the log likelihood ratio detection log messages.
-- `fail_reason` : the reason for the failure of the adapter detection.
+- `fail_reason` : the reason for the failure of the adapter detection, only present if the adapter detection failed.
 
 ## Signal preloading
 
 ADAPTed first preloads the first N samples of the signal into memory, and then detects the adapter signal.
 Sometimes, the adapter signal is longer than the preload size, this will lead to the detection failing.
 Sometimes, the adapter+polyA signal is longer than the preload size, this will lead to the detection succeeding, but the polyA signal will be truncated which is of concern for downstream analysis when the length or statistics of the polyA signal are of interest.
-If this is the case, we advise to run the tool once with default settings, and rerun it for truncated polyA reads with `--preload_size` set to a larger value.
+If this is the case, we advise to run the tool once with default settings, and rerun it for truncated polyA reads with `--max_obs_trace` set to a larger value.
 The same can be done for the failed reads to increase yield.
 
-In all cases, it is important to note that the statistics on the rna signal (`rna_mean`, `rna_std`, `rna_med`, `rna_mad`, `rna_len`) are based on the preloaded signal, and may not reflect the actual signal.
+In all cases, it is important to note that the statistics on the rna signal (`rna_preloaded_mean`, `rna_preloaded_std`, `rna_preloaded_med`, `rna_preloaded_mad`, `rna_preloaded_len`) are based on the preloaded signal, and may not reflect the actual signal.
 
 ## License
 
