@@ -19,6 +19,8 @@ from adapted.config.file_proc import BatchConfig, InputConfig, OutputConfig, Tas
 from adapted.config.sig_proc import SigProcConfig
 from adapted.io_utils import input_to_filelist
 
+from adapted._version import __version__
+
 
 def str2bool(v):
     if isinstance(v, bool):
@@ -187,7 +189,12 @@ def parse_args() -> Config:
 
     # create run dir
     if args.create_subdir:
-        run_dir_name = "adapted_" + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        run_dir_name = (
+            "adapted_"
+            + __version__.replace(".", "_")
+            + "_"
+            + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        )
         run_dir = os.path.join(args.output, run_dir_name)
     else:
         run_dir = args.output
