@@ -424,6 +424,8 @@ def refine_boundaries(
                 and first_local_min_poi_idx
                 - local_max_poi_before_first_local_min_poi_idx
                 >= params.min_obs_polya
+                and local_max_poi_before_first_local_min_poi_idx
+                < params.refine_max_adapter_end_adjust
             ):  # min length polya
                 logger.refine_adapter_end_adjusted = True
                 adapter_end = adapter_end + local_max_poi_before_first_local_min_poi_idx

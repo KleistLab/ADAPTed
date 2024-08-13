@@ -49,6 +49,9 @@ class LLRBoundariesConfig(BaseConfig):
 
     refine_polya_atol: int = 20
     refine_smooth_sigma: int = 10
+    refine_max_adapter_end_adjust: int = (
+        250  # adjustments to the adapter end greater than this value are likely incorrect and will be ignored
+    )
 
 
 @dataclass
