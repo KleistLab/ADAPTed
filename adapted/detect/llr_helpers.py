@@ -11,6 +11,7 @@ from typing import Optional, Tuple
 
 import numpy as np
 import pyximport
+import logging
 
 pyximport.install(setup_args={"include_dirs": np.get_include()})
 
@@ -49,7 +50,9 @@ class LLRTrace:
                 self.stride,
             )[-1]
         except IndexError:
-            print("ERROR", self.min_obs, self.signal.size, self.tail_trim, self.stride)
+            logging.error(
+                "ERROR", self.min_obs, self.signal.size, self.tail_trim, self.stride
+            )
             return self.signal.size - 1 - self.tail_trim
 
     @property
@@ -58,7 +61,9 @@ class LLRTrace:
 
     def __attrs_post_init__(self):
         if self.signal is None:
-            raise ValueError("signal is None")
+            msg = "signal is None"
+            logging.error(msg)
+            raise ValueError(msg)
 
         self.start, self.end = self._trace_start_end()
         self.early_stop = self.end < self.max_len_no_early_stop
@@ -138,7 +143,7 @@ def correct_for_plateau(
 
     if plateau_end > 0:
         if verbose:
-            print(f"plateau end found! {peak+ plateau_end}")
+            logging.info(f"plateau end found! {peak+ plateau_end}")
         peak = peak + plateau_end
     return peak
 
@@ -158,11 +163,11 @@ def correct_for_split_peak(
         prominence=prominence,
     )
     if verbose and peaks.size > 0:
-        print(f"found split peaks! {peaks}")
-        print(trace_sig[peaks[0] + peak], trace_sig[peak], t * trace_sig[peak])
+        logging.info(f"found split peaks! {peaks}")
+        logging.info(trace_sig[peaks[0] + peak], trace_sig[peak], t * trace_sig[peak])
     if peaks.size > 0 and trace_sig[peaks[0] + peak] >= t * trace_sig[peak]:
         if verbose:
-            print(f"split peak accepted! {peaks[0]}")
+            logging.info(f"split peak accepted! {peaks[0]}")
         return peaks[0] + peak
     return peak
 
@@ -241,13 +246,19 @@ def calc_adapter_trace(
 ) -> LLRTrace:
     # check if c and c2 are provided, they either need to be both there or not
     if (c is not None) != (c2 is not None):
-        raise ValueError("c and c2 need to be both provided or not provided")
+        msg = "c and c2 need to be both provided or not provided"
+        logging.error(msg)
+        raise ValueError(msg)
     # if c and c2 are provided, check if they have the correct size
     if c is not None and c2 is not None:
         if c.size != c2.size:
-            raise ValueError("c and c2 need to have the same size")
+            msg = "c and c2 need to have the same size"
+            logging.error(msg)
+            raise ValueError(msg)
         if c.size != signal.size:
-            raise ValueError("c and c2 need to have the same size as signal")
+            msg = "c and c2 need to have the same size as signal"
+            logging.error(msg)
+            raise ValueError(msg)
 
         llr_trace = c_llr_trace_gains(
             c=c.astype(np.float64),

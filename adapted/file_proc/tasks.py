@@ -8,6 +8,7 @@ Contact: w.vandertoorn@fu-berlin.de
 
 import traceback
 from typing import List
+import logging
 
 from adapted.config.sig_proc import SigProcConfig
 from adapted.detect.combined import combined_detect
@@ -39,8 +40,8 @@ def process_preloaded_signal(
         )
 
     except:
-        print(f"Failed on read {read_id}")
-        traceback.print_exc()
+        logging.error(f"Failed on read {read_id}")
+        logging.error(traceback.format_exc())
         return ReadResult(
             read_id=read_id,
             success=False,
@@ -61,9 +62,9 @@ def save_results_batch(
     elif pass_or_fail == "fail":
         fn = "failed_reads"
     else:
-        raise ValueError(
-            f"Invalid pass_or_fail: {pass_or_fail}. Must be 'pass' or 'fail'."
-        )
+        msg = f"Invalid pass_or_fail: {pass_or_fail}. Must be 'pass' or 'fail'."
+        logging.error(msg)
+        raise ValueError(msg)
 
     save_detected_boundaries(
         results,

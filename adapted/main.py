@@ -9,19 +9,22 @@ Contact: w.vandertoorn@fu-berlin.de
 import os
 import sys
 import time
+import logging
 
 from adapted.file_proc.file_proc import get_file_read_id_map, process
 from adapted.file_proc.tasks import process_preloaded_signal, save_results_batch
 from adapted.parser import parse_args
+from adapted.logger import setup_logger
 
 
 def main(args=None):
-    print("Command executed:")
-    print(" ".join(sys.argv))
 
     config = parse_args()
+    setup_logger(os.path.join(config.output.output_dir, "adapted.log"))
 
-    print("Saving output to:", config.output.output_dir)
+    logging.info(f"Command: {' '.join(sys.argv)}")
+
+    logging.info(f"Saving output to: {config.output.output_dir}")
 
     print_files = (
         config.input.files[: min(3, len(config.input.files))]
@@ -31,19 +34,19 @@ def main(args=None):
         else config.input.files
     )
     print_files_str = "\n".join(print_files)
-    print(f"Input Filenames:\n{print_files_str}")
-    print(f"Total files: {len(config.input.files)}")
+    logging.info(f"Input filenames:\n{print_files_str}")
+    logging.info(f"Total number of input files: {len(config.input.files)}")
 
     # report config
-    print("SigProcConfig:")
-    config.sig_proc.pretty_print()
+    logging.info("SigProcConfig:")
+    config.sig_proc.pretty_print(file=logging.getLogger().handlers[0].stream)  # type: ignore
 
     # Preprocess input_read_ids into batches
-    print(f"Preprocessing read IDs for {len(config.input.files)} files")
+    logging.info(f"Indexing read IDs...")
     start_time = time.time()
 
     file_read_id_map = get_file_read_id_map(config)
-    print(f"Time taken: {time.time() - start_time:.2f} seconds")
+    logging.info(f"Indexing took: {time.time() - start_time:.2f} seconds")
 
     config.input.files = []  # no longer needed, save space
     config.input.read_ids = []  # no longer needed, save space
@@ -59,6 +62,7 @@ def main(args=None):
         task_fn=process_preloaded_signal,
         results_fn=save_results_batch,
     )
+    logging.info("Done.")
 
 
 if __name__ == "__main__":

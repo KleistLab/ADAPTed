@@ -9,14 +9,16 @@ Contact: w.vandertoorn@fu-berlin.de
 import argparse
 import os
 from argparse import RawTextHelpFormatter
-from datetime import datetime
+import shutil
+import uuid
+import json
 
 import pandas as pd
 
 from adapted.config.base import load_nested_config_from_file
 from adapted.config.config import Config
 from adapted.config.file_proc import BatchConfig, InputConfig, OutputConfig, TaskConfig
-from adapted.config.sig_proc import SigProcConfig, chemistry_specific_config
+from adapted.config.sig_proc import SigProcConfig, get_chemistry_specific_config
 from adapted.io_utils import input_to_filelist
 
 from adapted._version import __version__
@@ -37,65 +39,41 @@ parser = argparse.ArgumentParser(
     prog="adapted",
     description=(
         "***** ADAPTed: Adapter and poly(A) Detection And Profiling Tool *****\n"
-        "ADAPTed is designed to pinpoint DNA adapter sequences in raw dRNA-seq signals. "
+        "ADAPTed is designed to pinpoint the location of DNA adapters and poly(A) signals in raw dRNA-seq signals. "
+        "\n\n"
         "For command-specific help, run: `adapted <command> --help`."
     ),
     formatter_class=RawTextHelpFormatter,
 )
 
-parent_parser = argparse.ArgumentParser(add_help=False)
 
-parent_parser.add_argument(
-    "--input",
+subparsers = parser.add_subparsers(dest="mode", required=True)
+
+parser_detect = subparsers.add_parser(
+    "detect",
+    help=("Detect adapter and poly(A) signal boundaries and calculate statistics."),
+    formatter_class=RawTextHelpFormatter,
+)
+
+
+parser_continue = subparsers.add_parser(
+    "continue",
+    help="Continue processing from a previous incomplete run.",
+    formatter_class=RawTextHelpFormatter,
+)
+parser_continue.add_argument(
+    "continue_from",
     type=str,
-    nargs="+",
     help=(
-        "Path(s) to pod5 file(s). If directory/directories, all .pod5 files in the"
-        " paths are processed (non-recursive). "
+        "Path to a folder containing the results of a previous incomplete run. "
+        "ADAPTed will load in the configuration and command used in the previous run, and "
+        "continue from the last processed read."
     ),
 )
 
-parent_parser.add_argument(
-    "--output",
-    type=str,
-    default=None,
-    help="Path to where the run output folder should be created. Default is the current working directory.",
-)
-
-
-parent_parser.add_argument(
-    "--config",
-    type=str,
-    help="Path to a valid configuration toml to use. See adapted/config/config_files/ for options.",
-)
-
-parent_parser.add_argument(
-    "--chemistry",
-    type=str,
-    choices=["RNA002", "RNA004"],
-    help="Specify the chemistry to use. If provided, --config is not required and will be ignored if both are provided.",
-)
-
-parent_parser.add_argument(
-    "--read_id_csv",
-    type=str,
-    default=None,
-    help=(
-        "Path to a csv file containing read IDs to be processed. Should contain a"
-        " 'read_id' column."
-    ),
-)
-parent_parser.add_argument(
-    "--read_id_csv_colname",
-    type=str,
-    default="read_id",
-    help=(
-        "Column name in 'read_id_csv' containing the read IDs to be processed. Defaults"
-        " to 'read_id'. This argument is ignored if '--preprocessed' is set."
-    ),
-)
-
-parent_parser.add_argument(
+# make performance group arguments only visible in the subparser
+performance_group = parser_detect.add_argument_group("performance")
+performance_group.add_argument(
     "-p",
     "--num_proc",
     type=int,
@@ -106,14 +84,14 @@ parent_parser.add_argument(
     ),
 )
 
-parent_parser.add_argument(
+performance_group.add_argument(
     "--batch_size",
     type=int,
     default=4000,
     help=("Number of reads per output file."),
 )
 
-parent_parser.add_argument(
+performance_group.add_argument(
     "--minibatch_size",
     type=int,
     default=50,
@@ -124,31 +102,39 @@ parent_parser.add_argument(
     ),
 )
 
-parent_parser.add_argument(
-    "--create_subdir",
-    type=str2bool,
-    default=True,
-    help="Whether to create a subdirectory for the output. Default is True.",
-)
-subparsers = parser.add_subparsers(dest="mode", required=True)
-
-# detect
-parser_detect = subparsers.add_parser(
-    "detect",
-    parents=[parent_parser],
-    description=(
-        "Detect command: Identifies adapter sequences and exports a CSV of detected boundaries to `save_path`."
+processing_group = parser_detect.add_argument_group("processing")
+processing_group.add_argument(
+    "--input",
+    type=str,
+    nargs="+",
+    help=(
+        "Path(s) to pod5 file(s). If directory/directories, all .pod5 files in the"
+        " paths are processed (non-recursive). "
     ),
-    formatter_class=RawTextHelpFormatter,
-)
-parser_detect.add_argument(
-    "--save_llr_trace",
-    type=str2bool,
-    default=False,
-    help="Save the LLR trace for each read.",
 )
 
-parser_detect.add_argument(
+processing_group.add_argument(
+    "--output",
+    type=str,
+    default=None,
+    help="Path to where the run output folder should be created. Default is the current working directory.",
+)
+
+
+processing_group.add_argument(
+    "--config",
+    type=str,
+    help="Path to a valid configuration toml to use. See adapted/config/config_files/ for options.",
+)
+
+processing_group.add_argument(
+    "--chemistry",
+    type=str,
+    choices=["RNA002", "RNA004"],
+    help="Specify the chemistry to use. If provided, --config is not required and will be ignored if both are provided.",
+)
+
+processing_group.add_argument(
     "--max_obs_trace",
     type=int,
     default=None,
@@ -159,23 +145,70 @@ parser_detect.add_argument(
     ),
 )
 
+processing_group.add_argument(
+    "--save_llr_trace",
+    type=str2bool,
+    default=False,
+    help="Save the LLR trace for each read. Warning: this can produce very large files.",
+)
 
-# # Future feature
-# parser_trim = subparsers.add_parser(
-#     "trim_BAM",
-#     parents=[parent_parser],
-#     description=(
-#         "Trim BAM command: Processes raw signal files, detects adapters, and adjusts the tandem BAM file accordingly. "
-#         "Outputs adapter sequences and trimmed reads as separate BAM files to `save_path`."
-#     ),
-#     formatter_class=RawTextHelpFormatter,
-# )
+processing_group.add_argument(
+    "--read_id_csv",
+    type=str,
+    default=None,
+    help=(
+        "Path to a csv file containing the (subset) of read IDs to be processed. Should contain a"
+        " 'read_id' column."
+    ),
+)
+processing_group.add_argument(
+    "--read_id_csv_colname",
+    type=str,
+    default="read_id",
+    help=(
+        "Column name in 'read_id_csv' containing the read IDs to be processed. Defaults"
+        " to 'read_id'. This argument is ignored if '--preprocessed' is set."
+    ),
+)
 
-# parser_trim.add_argument("BAM_file", type=str, help="Path to the BAM file to process.")
+parser_detect._action_groups.reverse()  #'positional arguments', 'optional arguments', 'Performance', 'Processing'; reverse to get Processing first
 
 
 def parse_args() -> Config:
     args = parser.parse_args()
+
+    if args.mode == "continue":
+        try:
+            # load the parser arguments from the command.json file
+            with open(os.path.join(args.continue_from, "command.json"), "r") as f:
+                command_dict = json.load(f)
+        except FileNotFoundError:
+            parser.error(
+                "No command.json file found in the continue_from directory. "
+                "Please provide a valid continue-from directory."
+            )
+
+        # create a backup of the command.json file
+        shutil.copy(
+            os.path.join(args.continue_from, "command.json"),
+            os.path.join(args.continue_from, "command_previous.json"),
+        )
+
+        # update args with the keys in command_dict that are not in args
+        for key, value in command_dict.items():
+            if key not in args.__dict__:
+                args.__dict__[key] = value
+
+        # update the args with the command_dict
+        run_dir = args.continue_from
+    else:
+        args.output = args.output or os.getcwd()
+
+        # create run dir
+        run_dir_name = (
+            "adapted_" + __version__.replace(".", "_") + "_" + str(uuid.uuid4())[:8]
+        )
+        run_dir = os.path.join(args.output, run_dir_name)
 
     if not args.config and not args.chemistry:
         parser.error("Either --config or --chemistry must be provided.")
@@ -193,25 +226,10 @@ def parse_args() -> Config:
         print("Provided path: {}".format(args.input))
         exit(1)
 
-    if args.output is None:
-        args.output = os.getcwd()
-
-    # create run dir
-    if args.create_subdir:
-        run_dir_name = (
-            "adapted_"
-            + __version__.replace(".", "_")
-            + "_"
-            + datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        )
-        run_dir = os.path.join(args.output, run_dir_name)
-    else:
-        run_dir = args.output
-    os.makedirs(run_dir, exist_ok=True)
-
     input_config = InputConfig(
         files=files,
         read_ids=read_ids,
+        continue_from=args.continue_from if "continue_from" in args else "",
     )
 
     task_config = TaskConfig(
@@ -232,7 +250,7 @@ def parse_args() -> Config:
     if args.config:  # when config is provided, chemistry is ignored
         spc = load_nested_config_from_file(args.config, SigProcConfig)
     else:
-        spc = chemistry_specific_config(
+        spc = get_chemistry_specific_config(
             chemistry=args.chemistry
         )  # Use chemistry if config is not provided
 
@@ -240,6 +258,14 @@ def parse_args() -> Config:
         spc.llr_boundaries.max_obs_trace = args.max_obs_trace
 
     spc.update_sig_preload_size()
+
+    # Create run_dir if it doesn't exist
+    os.makedirs(run_dir, exist_ok=True)
+    # Create command.json file
+    command_dict = vars(args)
+    command_json_path = os.path.join(run_dir, "command.json")
+    with open(command_json_path, "w") as f:
+        json.dump(command_dict, f, indent=2)
 
     return Config(
         input=input_config,

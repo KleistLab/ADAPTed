@@ -8,22 +8,23 @@ Contact: w.vandertoorn@fu-berlin.de
 
 import concurrent.futures
 import multiprocessing
+import os
 import signal
+import sys
+import time
+import logging
 import traceback
 from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Process, Manager
 from dataclasses import dataclass
-from functools import partial
-from itertools import zip_longest
 from typing import (
     Any,
     Callable,
     Dict,
-    Generator,
-    Iterable,
     List,
     Optional,
+    Set,
     Tuple,
-    Union,
 )
 
 import numpy as np
@@ -32,8 +33,8 @@ from tqdm import tqdm
 from pod5 import Reader
 
 from adapted.config.config import Config
-from adapted.config.sig_proc import SigProcConfig
 from adapted.detect.combined import DetectResults
+
 
 # Global flag to track if CTRL+C signal has been received
 CTRL_C_RECEIVED = False
@@ -61,39 +62,8 @@ def signal_handler(sig, frame):
     global CTRL_C_RECEIVED
     for process in multiprocessing.active_children():
         process.terminate()
-    print("Ctrl+C detected. Stopping the script.")
+    logging.info("Ctrl+C detected. Stopping the script.")
     CTRL_C_RECEIVED = True
-
-
-def process_minibatch_of_preloaded_signal(
-    signals: np.ndarray,
-    in_arr_lengths: np.ndarray,
-    full_sig_lengths: np.ndarray,
-    read_ids: List[str],
-    spc: SigProcConfig,
-    task_fn: Callable,
-    task_kwargs: Dict[str, Any] = {},
-    output_queue=None,
-) -> List[ReadResult]:
-    results = []
-
-    for signal, signal_len, full_sig_len, read_id in zip(
-        signals, in_arr_lengths, full_sig_lengths, read_ids
-    ):
-        proc_res = task_fn(
-            signal=signal,
-            signal_len=signal_len,
-            full_sig_len=full_sig_len,
-            read_id=read_id,
-            spc=spc,
-            **task_kwargs,
-        )
-        if output_queue is not None:
-            output_queue.put(proc_res)
-        else:
-            results.append(proc_res)
-
-    return results
 
 
 def load_signals_in_mem(
@@ -115,86 +85,120 @@ def load_signals_in_mem(
         read_ids.append(str(read.read_id))
 
     if not set(read_ids) == set(ids):
-        print("Read ids do not match")
         set_diff = set(ids).symmetric_difference(set(read_ids))
-        print(f"Missing read ids: {set_diff}")
-        raise ValueError("Read ids do not match")
+        msg = "Read ids do not match. Check if the provided read ids are correct. "
+        msg += f"Missing read ids: {set_diff}"
+        logging.error(msg)
+        raise ValueError(msg)
 
     return signals, in_arr_lengths, full_lengths, read_ids
 
 
-def grouper(
-    iterable: Iterable, n: int, fillvalue=None
-) -> Generator[Tuple[Any], None, None]:
-    """
-    Collect data into fixed-length chunks or blocks.
-    From https://docs.python.org/3/library/itertools.html#itertools-recipes
-    """
-
-    args = [iter(iterable)] * n
-    return zip_longest(*args, fillvalue=fillvalue)  # type: ignore
-
-
 def result_processor(
-    output_queue: multiprocessing.Queue,  # individual read results
-    total: int,  # number of reads expected
-    result_batch_size: int,
-    result_fn: Callable,
-    result_kwargs: Dict[str, Any] = {},
-) -> None:
-    try:
-        pbar = tqdm(
-            total=total,
-            desc=f"Processing reads",
-        )
+    shared_results,
+    total,
+    result_batch_size,
+    result_fn,
+    result_kwargs,
+    bidx_passed=0,
+    bidx_failed=0,
+):
+    pbar = tqdm(total=total, desc="Processing reads", file=sys.stdout)
+    failed, passed = [], []
+    n_seen, n_passed, n_failed = 0, 0, 0
 
-        failed, passed = [], []
-        bidx_failed = 0
-        bidx_passed = 0
-        while True:
-            res = output_queue.get()
-            if res is None:  # stop signal
-                break
+    while n_seen < total:
+        while len(shared_results):
+            res = shared_results.pop(0)
+            n_seen += 1
             pbar.update(1)
-
+            # try:
             if res.success:
                 passed.append(res)
                 if len(passed) == result_batch_size:
                     result_fn(
-                        "pass", results=passed, batch_idx=bidx_passed, **result_kwargs
+                        "pass",
+                        results=passed,
+                        batch_idx=bidx_passed,
+                        **result_kwargs,
                     )
+                    n_passed += result_batch_size
                     bidx_passed += 1
                     passed = []
             else:
                 failed.append(res)
                 if len(failed) == result_batch_size:
                     result_fn(
-                        "fail", results=failed, batch_idx=bidx_failed, **result_kwargs
+                        "fail",
+                        results=failed,
+                        batch_idx=bidx_failed,
+                        **result_kwargs,
                     )
+                    n_failed += result_batch_size
                     bidx_failed += 1
                     failed = []
+        time.sleep(0.1)  # Avoid busy waiting
 
-        # cleanup
-        if passed:
-            result_fn("pass", results=passed, batch_idx=bidx_passed, **result_kwargs)
-        if failed:
-            result_fn("fail", results=failed, batch_idx=bidx_failed, **result_kwargs)
+    # Process remaining results
+    if passed:
+        result_fn("pass", results=passed, batch_idx=bidx_passed, **result_kwargs)
+    if failed:
+        result_fn("fail", results=failed, batch_idx=bidx_failed, **result_kwargs)
 
-        # report
-        n_passed = bidx_passed * result_batch_size + len(passed)
-        n_failed = bidx_failed * result_batch_size + len(failed)
+    pbar.close()
+    logging.info(f"Read processing completed in {pbar.format_dict['elapsed']:.2f}s")
 
-        divisor = n_passed + n_failed
-        fraction = n_passed / divisor if divisor != 0 else 0
+    n_passed += len(passed)
+    n_failed += len(failed)
+    divisor = n_passed + n_failed
+    fraction = n_passed / divisor if divisor != 0 else 0
+    logging.info(
+        f"Successfully detected an adapter in {n_passed} / {divisor} reads ({fraction * 100:.2f}%)."
+    )
 
-        pbar.close()
-        print(
-            f"Succesfully processed {n_passed} / {divisor} reads ({fraction * 100:.2f}%)."
-        )
-        return
-    except:
-        print("Failed to process results")
-        traceback.print_exc()
+
+def worker(
+    filename: str,
+    minibatch_ids: List[str],
+    config: Config,
+    task_fn: Callable,
+    shared_results: List[ReadResult],
+):
+    try:
+        with Reader(path=filename) as file_obj:
+            signals, in_arr_lengths, full_sig_lengths, read_ids = load_signals_in_mem(
+                file_obj,
+                minibatch_ids,
+                max_obs=config.sig_proc.sig_preload_size,
+            )
+
+        results = []
+        for signal, signal_len, full_sig_len, read_id in zip(
+            signals, in_arr_lengths, full_sig_lengths, read_ids
+        ):
+            try:
+                result = task_fn(
+                    signal=signal,
+                    signal_len=signal_len,
+                    full_sig_len=full_sig_len,
+                    read_id=read_id,
+                    spc=config.sig_proc,
+                    **config.task.dict(),
+                )
+                results.append(result)
+            except Exception as e:
+                logging.error(
+                    f"Error processing read {read_id}: {e}. Read will be considered failed."
+                )
+                results.append(
+                    ReadResult(read_id=read_id, success=False, fail_reason=str(e))
+                )
+
+        shared_results.extend(results)
+
+    except Exception as e:
+        logging.error(f"Error in worker process: {e}")
+        logging.error(traceback.format_exc())
 
 
 def process_in_batches(
@@ -203,115 +207,62 @@ def process_in_batches(
     task_fn: Callable,
     result_fn: Callable,
 ):
-    max_concurrent_tasks = (
-        multiprocessing.cpu_count()
-        if config.batch.num_proc is None
-        else config.batch.num_proc
-    )
+    max_concurrent_tasks = config.batch.num_proc or multiprocessing.cpu_count()
 
-    n_minibatches = number_of_minibatches(file_read_id_map, config.batch.minibatch_size)
+    with Manager() as manager:
+        shared_results: List[ReadResult] = manager.list()  # type: ignore
 
-    data_loader = minibatch_generator(file_read_id_map, config.batch.minibatch_size)
+        result_process = Process(
+            target=result_processor,
+            args=(
+                shared_results,
+                number_of_reads(file_read_id_map),
+                config.batch.batch_size,
+                result_fn,
+                config.output.dict(),
+                config.batch.bidx_passed,
+                config.batch.bidx_failed,
+            ),
+        )
+        result_process.start()
 
-    try:
-        result_executor = ProcessPoolExecutor(1)
-        with multiprocessing.Manager() as manager:
-            output_queue = manager.Queue()  # type: ignore
-            output_queue = (
-                output_queue
-            )  # type: multiprocessing.Queue[Union[ReadResult, None]]
-
-            result_executor.submit(
-                result_processor,
-                output_queue=output_queue,
-                total=number_of_reads(file_read_id_map),
-                result_batch_size=config.batch.batch_size,
-                result_fn=result_fn,
-                result_kwargs=config.output.dict(),
-            )
-
-            task = partial(
-                process_minibatch_of_preloaded_signal,
-                output_queue=output_queue,
-                spc=config.sig_proc,
-                task_fn=task_fn,
-                task_kwargs=config.task.dict(),
-            )
-
-            with ProcessPoolExecutor(max_concurrent_tasks) as executor:
-
-                def submit_task(file_obj, batch_of_read_ids):
-                    sig_data = load_signals_in_mem(
-                        file_obj,
-                        batch_of_read_ids,
-                        max_obs=config.sig_proc.sig_preload_size,
-                    )  # sig_data = signals, in_arr_lengths, full_lengths, read_ids
-
-                    return executor.submit(
-                        task,
-                        *sig_data,
+        logging.info("Starting read processing...")
+        with ProcessPoolExecutor(max_concurrent_tasks) as executor:
+            futures = []
+            for filename, read_ids in file_read_id_map.items():
+                for i in range(0, len(read_ids), config.batch.minibatch_size):
+                    end_idx = min(i + config.batch.minibatch_size, len(read_ids))
+                    minibatch_ids = read_ids[i:end_idx]
+                    future = executor.submit(
+                        worker,
+                        filename,
+                        minibatch_ids,
+                        config,
+                        task_fn,
+                        shared_results,
                     )
+                    futures.append(future)
 
-                # wait with preloading data untill a processor is free to limit memory use
+            for future in concurrent.futures.as_completed(futures):
+                try:
+                    future.result()
+                except Exception as e:
+                    logging.error(f"Task failed: {e}")
 
-                # Start the initial batch of tasks
-                futures = set()
-                tasks_submitted = min(max_concurrent_tasks, n_minibatches)
-                for _ in range(tasks_submitted):
-                    futures.add(submit_task(*next(data_loader)))
+                if CTRL_C_RECEIVED:
+                    logging.info("Terminating due to CTRL+C")
+                    break
 
-                while tasks_submitted < n_minibatches:
-                    # Wait for at least one task to complete
-                    _, futures = concurrent.futures.wait(
-                        futures, return_when=concurrent.futures.FIRST_COMPLETED
-                    )  # futures now contains the not-done-yet tasks
-
-                    # Submit new tasks as long as there are tasks left
-                    while (
-                        len(futures) < max_concurrent_tasks
-                        and tasks_submitted < n_minibatches
-                    ):
-                        futures.add(submit_task(*next(data_loader)))
-                        tasks_submitted += 1
-
-                executor.shutdown(wait=True)
-            output_queue.put(None)
-
-        result_executor.shutdown(wait=True)  # wait till all are saved
-    except:
-        print(f"Failed to process batches")
-        traceback.print_exc()
-        return []
-
-
-def minibatch_generator(
-    file_read_id_map: Dict[str, List[str]],
-    minibatch_size: int,
-) -> Generator[Tuple[Reader, List[str]], None, None]:
-    """
-    Generator that yields batches of read_ids from the file_read_id_map.
-    """
-    for filename, read_id_list in file_read_id_map.items():
-        file_obj = Reader(path=filename)
-
-        for batch in grouper(read_id_list, minibatch_size):
-            try:  # last minibatch might be smaller than minibatch_size and contain None
-                none_idx = batch.index(None)
-                batch = batch[:none_idx]
-            except:  # no None
-                pass
-
-            yield file_obj, list(batch)
+        result_process.join(timeout=60)
+        if result_process.is_alive():
+            logging.error("Result processor did not finish in time. Terminating.")
+            result_process.terminate()
+        else:
+            logging.info("All barcode fingerprints are saved.")
 
 
 def number_of_reads(file_read_id_map: Dict[str, List[str]]) -> int:
     return sum(len(read_ids) for read_ids in file_read_id_map.values())
-
-
-def number_of_minibatches(
-    file_read_id_map: Dict[str, List[str]], minibatch_size: int
-) -> int:
-    return int(np.ceil(number_of_reads(file_read_id_map) / minibatch_size))
 
 
 def get_file_read_id_map(config: Config) -> Dict[str, List[str]]:
@@ -325,26 +276,85 @@ def get_file_read_id_map(config: Config) -> Dict[str, List[str]]:
 
     n_found_read_ids = 0
     for filename in config.input.files:
-        file_obj = Reader(path=filename)
-        file_read_id_list = file_obj.read_ids
-        file_read_id_set = set(file_read_id_list)
+        try:
+            file_obj = Reader(path=filename)
+            file_read_id_list = file_obj.read_ids
+            file_read_id_set = set(file_read_id_list)
 
-        if n_requested_read_ids is None:
-            file_read_id_map[filename] = file_read_id_list
-        else:
-            file_read_id_map[filename] = list(
-                read_id_set.intersection(file_read_id_set)
-            )
-        n_found_read_ids += len(file_read_id_map[filename])
+            if n_requested_read_ids is None:
+                file_read_id_map[filename] = file_read_id_list
+            else:
+                file_read_id_map[filename] = list(
+                    read_id_set.intersection(file_read_id_set)
+                )
+
+            n_found_read_ids += len(file_read_id_map[filename])
+        except Exception as e:
+            print(f"Error reading in {filename}: {e}")
+
+    if config.input.continue_from:
+        processed_reads, max_pass_bidx, max_fail_bidx = scan_processed_reads(
+            config.input.continue_from
+        )
+
+        for filename in file_read_id_map:
+            file_read_id_map[filename] = [
+                read_id
+                for read_id in file_read_id_map[filename]
+                if read_id not in processed_reads
+            ]
+        n_found_read_ids -= len(processed_reads)
+        config.batch.bidx_passed = max_pass_bidx + 1
+        config.batch.bidx_failed = max_fail_bidx + 1
+
+    if config.input.continue_from:
+        processed_reads, max_pass_bidx, max_fail_bidx = scan_processed_reads(
+            config.input.continue_from
+        )
+
+        for filename in file_read_id_map:
+            file_read_id_map[filename] = [
+                read_id
+                for read_id in file_read_id_map[filename]
+                if read_id not in processed_reads
+            ]
+        n_found_read_ids -= len(processed_reads)
+        config.batch.bidx_passed = max_pass_bidx + 1
+        config.batch.bidx_failed = max_fail_bidx + 1
+
+    remaining_str = "remaining" if config.input.continue_from else ""
 
     requested_str = (
         f"out of {n_requested_read_ids} requested"
         if n_requested_read_ids is not None
         else ""
     )
-    print(f"Found {n_found_read_ids} read_ids {requested_str}")
+    logging.info(f"Found {n_found_read_ids} {remaining_str} read_ids {requested_str}")
 
     return file_read_id_map
+
+
+def scan_processed_reads(continue_from_path: str) -> Tuple[Set[str], int, int]:
+    processed_reads = set()
+    max_pass_bidx = -1
+    max_fail_bidx = -1
+
+    # Scan detected_boundaries files
+    for file in os.listdir(continue_from_path):
+        if file.startswith("detected_boundaries_") and file.endswith(".csv"):
+            bidx = int(file.split("_")[-1].split(".")[0])
+            max_pass_bidx = max(max_pass_bidx, bidx)
+            with open(os.path.join(continue_from_path, file), "r") as f:
+                processed_reads.update(line.split(",")[0] for line in f.readlines()[1:])
+
+    # Scan failed_reads files
+    for file in os.listdir(continue_from_path):
+        if file.startswith("failed_reads_") and file.endswith(".csv"):
+            bidx = int(file.split("_")[-1].split(".")[0])
+            max_fail_bidx = max(max_fail_bidx, bidx)
+            with open(os.path.join(continue_from_path, file), "r") as f:
+                processed_reads.update(line.split(",")[0] for line in f.readlines()[1:])
+    return processed_reads, max_pass_bidx, max_fail_bidx
 
 
 def process(
@@ -364,9 +374,7 @@ def process(
             result_fn=results_fn,
         )
 
-        print("Done.")
-
     except:
-        print("Failed to process files")
-        traceback.print_exc()
+        logging.error("Failed to process files")
+        logging.error(traceback.format_exc())
         return

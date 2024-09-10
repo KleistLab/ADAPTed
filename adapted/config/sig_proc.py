@@ -8,7 +8,9 @@ Contact: w.vandertoorn@fu-berlin.de
 
 import importlib.resources as pkg_resources
 from dataclasses import dataclass
-from typing import Optional, Tuple
+from typing import Any, MutableMapping, Optional, Tuple, Union
+import logging
+import toml
 
 from adapted.config import config_files
 from adapted.config.base import BaseConfig, NestedConfig, load_nested_config_from_file
@@ -154,20 +156,33 @@ class SigProcConfig(NestedConfig):
         )
 
 
+def config_name_to_dict(config_name: str) -> Union[dict, MutableMapping[str, Any]]:
+    with pkg_resources.path(config_files, f"{config_name}.toml") as config_path:
+        return toml.load(config_path)
+
+
 def get_config(config_name: str) -> SigProcConfig:
     with pkg_resources.path(config_files, f"{config_name}.toml") as config_path:
         return load_nested_config_from_file(config_path, SigProcConfig)
 
 
-def chemistry_specific_config(
+def chemistry_specific_config_name(
+    chemistry: str, version: Optional[str] = None
+) -> str:
+    if version is None:
+        version = __version__
+    speed = config_files.speeds[chemistry.lower()]
+    return f"{chemistry.lower()}_{speed}@v{version}"
+
+
+def get_chemistry_specific_config(
     chemistry: str, version: Optional[str] = None
 ) -> SigProcConfig:
     if chemistry.lower() not in ["rna002", "rna004"]:
-        raise ValueError(f"Unknown chemistry: {chemistry}")
+        msg = f"Unknown chemistry: {chemistry}"
+        logging.error(msg)
+        raise ValueError(msg)
     if version is None:
         version = __version__
 
-    speed = config_files.speeds[chemistry.lower()]
-
-    config_name = f"{chemistry.lower()}_{speed}@v{version}"
-    return get_config(config_name)
+    return get_config(chemistry_specific_config_name(chemistry, version))

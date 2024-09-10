@@ -7,6 +7,7 @@ Contact: w.vandertoorn@fu-berlin.de
 """
 
 import numpy as np
+import logging
 
 
 def impute_window_median(
@@ -38,7 +39,9 @@ def impute_window_median(
 
     # check if window size is at least 3
     if window_size < 3:
-        raise ValueError("window_size should be at least 3")
+        msg = "window_size should be at least 3"
+        logging.error(msg)
+        raise ValueError(msg)
 
     half_window = window_size // 2
 
@@ -99,7 +102,9 @@ def mad_normalize(signal: np.ndarray) -> np.ndarray:
     scale = np.median(np.abs(signal - shift))
 
     if scale == 0:
-        raise ValueError("MAD normalization failed: scale is 0")
+        msg = "MAD normalization failed: scale is 0"
+        logging.error(msg)
+        raise ValueError(msg)
 
     norm_signal = (signal - shift) / scale
     return norm_signal

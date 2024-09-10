@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.2] - 2024-09-10
+
+### Fixed
+
+- Faulty pod5 files (e.g. `pod5: IOError: Invalid signature in file`) are now catched, faulty input files are skipped.
+
+### Added
+
+- get_truncated.sh: added a new script to easily obtain the truncated reads from the detected_boundaries*.csv files.
+- command.json file is now saved in the output folder and contains the command used to run ADAPTed.
+- Logging: process outputs are now logged to the `adapted.log` file and to stdout.
+- ADAPTed now supports continuing from a previous (incomplete) run using the `continue <continue_from_path>` subcommand.
+
+### Changed
+
+- Multiprocessing of reads now relies on a shared memory object to process the results of the reads. This allows for a more efficient use of system resources and prevents issues with broken pipe errors.
+- The output directory is now named after the version of ADAPTed and a random UUID rather than the current date and time.
+
+### Removed
+
+- The `--create_subdir` argument is removed. The output directory is now always created in the specified output folder.
+
 ## [v0.2.1] - 2024-08-13
 
 ### Added

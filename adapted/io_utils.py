@@ -9,6 +9,7 @@ Contact: w.vandertoorn@fu-berlin.de
 import os
 import re
 from typing import List
+import logging
 
 
 def validate_filename(
@@ -21,28 +22,33 @@ def validate_filename(
     if not os.path.exists(filename):
         check1 = False
         if raise_:
-            raise ValueError("The provided file does not exist.")
+            msg = f"The provided file {filename} does not exist."
+            logging.error(msg)
+            raise ValueError(msg)
     if os.path.isdir(filename):
         check2 = False
         if raise_:
-            raise ValueError("The provided file should not be a directory.")
+            msg = "The provided file should not be a directory."
+            logging.error(msg)
+            raise ValueError(msg)
     if not any([filename.endswith(endswith) for endswith in endswiths]):
         check3 = False
         if raise_:
-            raise ValueError(
-                "The provided file should have one of the following extensions: {}".format(
-                    endswiths
-                )
+            msg = "The provided file should have one of the following extensions: {}".format(
+                endswiths
             )
+            logging.error(msg)
+            raise ValueError(msg)
+
     if basenameprefix is not None:
         if not os.path.basename(filename).startswith(basenameprefix):
             check4 = False
             if raise_:
-                raise ValueError(
-                    "The provided file should have the following basename: {}".format(
-                        basenameprefix
-                    )
+                msg = "The provided file should have the following basename: {}".format(
+                    basenameprefix
                 )
+                logging.error(msg)
+                raise ValueError(msg)
 
     return all([check1, check2, check3, check4])
 
@@ -51,7 +57,9 @@ def get_valid_files(
     basedir: str, endswiths: List[str] = [], basenameprefix: str = ""
 ) -> List[str]:
     if not len(endswiths) and basenameprefix is None:
-        raise ValueError("Either `endswiths` or `basenameprefix` should be specified.")
+        msg = "Either `endswiths` or `basenameprefix` should be specified."
+        logging.error(msg)
+        raise ValueError(msg)
 
     valid_files = []
     # walk through directory structure searching for pod5 files
