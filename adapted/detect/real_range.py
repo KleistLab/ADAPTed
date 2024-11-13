@@ -9,7 +9,6 @@ Contact: w.vandertoorn@fu-berlin.de
 from typing import Literal, Tuple, overload
 
 import numpy as np
-
 from adapted.config.sig_proc import RealRangeConfig
 from adapted.detect.utils import LOCAL_RANGE_PCTLS, in_range
 

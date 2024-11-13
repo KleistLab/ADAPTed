@@ -6,31 +6,31 @@ Contact: w.vandertoorn@fu-berlin.de
 
 """
 
-import traceback
-from typing import List
 import logging
+import traceback
+from typing import List, Optional
 
+import numpy as np
 from adapted.config.sig_proc import SigProcConfig
-from adapted.detect.combined import combined_detect
+from adapted.container_types import ReadResult
+from adapted.detect.cnn import BoundariesCNN, load_cnn_model
+from adapted.detect.combined import combined_detect_cnn, combined_detect_llr
 from adapted.io_utils import construct_filename
 from adapted.output import save_detected_boundaries, save_traces
-from adapted.file_proc.file_proc import ReadResult
 
 
-def process_preloaded_signal(
-    signal,
-    signal_len: int,
+def process_preloaded_signal_combined_detect_llr(
+    signal: np.ndarray,
     full_sig_len: int,
     read_id: str,
     spc: SigProcConfig,
-    llr_return_trace: bool = False,
 ) -> ReadResult:
     try:
-        detect_results = combined_detect(
-            calibrated_signal=signal[:signal_len],
+
+        detect_results = combined_detect_llr(
+            calibrated_signal=signal,
             full_signal_len=full_sig_len,
             spc=spc,
-            llr_return_trace=llr_return_trace,
         )
         return ReadResult(
             read_id=read_id,
@@ -48,6 +48,35 @@ def process_preloaded_signal(
             fail_reason="Unknown error",
             detect_results=None,
         )
+
+
+def process_preloaded_signal_combined_detect_cnn(
+    batch_of_signals: np.ndarray,
+    full_lengths: np.ndarray,
+    read_ids: np.ndarray,
+    spc: SigProcConfig,
+    model: Optional[BoundariesCNN] = None,
+) -> List[ReadResult]:
+    if model is None:
+        model = load_cnn_model(spc.cnn_boundaries.model_name)
+
+    return [
+        ReadResult(
+            read_id=read_id,
+            success=detect_results.success,
+            fail_reason=detect_results.fail_reason,
+            detect_results=detect_results,
+        )
+        for read_id, detect_results in zip(
+            read_ids,
+            combined_detect_cnn(
+                batch_of_signals=batch_of_signals,
+                full_signal_lens=full_lengths,
+                model=model,
+                spc=spc,
+            ),
+        )
+    ]
 
 
 def save_results_batch(

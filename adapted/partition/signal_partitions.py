@@ -11,7 +11,7 @@ from typing import Optional
 
 import numpy as np
 
-from adapted.detect.llr import Boundaries
+from adapted.container_types import Boundaries
 
 
 @dataclass
@@ -85,9 +85,12 @@ def calc_partition_stats(
         return Partition(start, None, None, None, None, None)
 
     length = end - start
-    signal_mean = float(np.mean(signal[start:end]))
-    signal_std = float(np.std(signal[start:end]))
-    signal_med = float(np.median(signal[start:end]))
-    signal_mad = float(np.median(np.abs(signal[start:end] - signal_med)))
+    if length == 0:
+        return Partition(start, 0, None, None, None, None)
+    sig = signal[start:end]
+    signal_mean = float(np.mean(sig))
+    signal_std = float(np.std(sig))
+    signal_med = float(np.median(sig))
+    signal_mad = float(np.median(np.abs(sig - signal_med)))
 
     return Partition(start, length, signal_mean, signal_std, signal_med, signal_mad)

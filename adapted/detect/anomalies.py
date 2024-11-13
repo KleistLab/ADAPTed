@@ -9,7 +9,6 @@ Contact: w.vandertoorn@fu-berlin.de
 from typing import Optional, Tuple
 
 import numpy as np
-
 from adapted.detect.utils import in_range
 
 

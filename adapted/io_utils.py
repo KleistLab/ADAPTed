@@ -6,10 +6,10 @@ Contact: w.vandertoorn@fu-berlin.de
 
 """
 
+import logging
 import os
 import re
 from typing import List
-import logging
 
 
 def validate_filename(

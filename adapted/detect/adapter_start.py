@@ -8,7 +8,6 @@ Contact: w.vandertoorn@fu-berlin.de
 
 import bottleneck
 import numpy as np
-
 from adapted.config.sig_proc import MMAdapterStartConfig
 
 

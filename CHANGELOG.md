@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.3] - 2024-11-13
+
+### Fixed
+
+- Mysterious runtime warnings occuring in the mvs polya workflow were identified as being due to too short signals. These signals are now filtered out before the detection workflow.
+- Run time warnings during peak detection are now filtered.
+
+### Added
+
+- A new detection workflow is added that uses a CNN to predict the boundaries of the adapter and polyA signals. The CNN method replaces the previous llr workflow as the primary detection method and provides faster detection. The CNN workflow comes with a depency on torch (`combined_detect_cnn`).
+- SigProcConfig now has a primary_config attribute that is set at runtime to describe the detection workflow used prior to validation.
+- Introduction of a new `combined_detect_llr2` function that uses a downscaled signal for the llr workflow, with a split peak correction for the polyA trace.
+- The `combined_detect_cnn` function now has a fallback to a quick version of the `llr` method if validation of the boundary predictions fails.
+
+### Changed
+
+- `config.batch.bidx_passed/failed` is now `config.batch.batch_idx_pass/fail`.
+- default minibatch size is now 1000.
+- `combined_detect` has been renamed to `combined_detect_llr`.
+- `ReadResult`, `DetectResults` and `Boundaries` have been moved to `adapted.container_types`.
+- Preloaded signals that are shorter than the preload size are now padded with nans instead of zeros.
+- Mad winsorization by imputing outliers with local medians has been changed to mad winsorization by clipping.
+- The flag for setting the `num_proc` in the parser has been changed to `-j`.
+- Introduction of the 'core' SigProcConfig section that contains parameters that are used across multiple detection methods in the code.
+- `sig_norm_outlier_thresh` has been moved to the new `core` section, as have adapter, trace and polya min/max obs parameters.
+- The `llr_helpers` module has been merged into the `llr` module.
+
+### Removed
+
+- The Task attribute of the Config object is removed.
+- The `save_llr_trace` parser argument is removed.
+- Functions for mad winsorization by imputing outliers with local medians (`impute_window_median`, `mad_outlier_indices`, `mad_normalize`, `mad_winsor`) are removed.
+- The `sig_norm_winsor_window` `LLRBoundariesConfig` attribute is removed.
+
+
 ## [v0.2.2] - 2024-09-10
 
 ### Fixed

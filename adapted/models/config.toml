@@ -1,0 +1,3 @@
+[rna004_130bps_v0_2_3_pth]
+downscale_factor = 10
+model_name = "rna004_130bps@v0.2.3.pth"

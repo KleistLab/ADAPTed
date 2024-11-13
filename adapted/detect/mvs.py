@@ -14,7 +14,6 @@ from typing import Literal, Tuple, Union, overload
 
 import bottleneck
 import numpy as np
-
 from adapted.config.sig_proc import MVSPolyAConfig, StreamingConfig
 from adapted.detect.utils import LOCAL_RANGE_PCTLS, in_range
 
@@ -60,12 +59,34 @@ def mean_var_shift_polyA_check(
 
     sig_size = calibrated_signal.size
 
+    failed_results = (
+        (
+            False,
+            np.zeros(5).astype(bool),
+            return_mean,
+            return_var,
+            return_polya_med,
+            return_polya_local_range_,
+            return_med_shift,
+        )
+        if return_values
+        else False
+    )  # type: ignore
+
+    if (
+        polya_end == 0
+        or adapter_end == 0
+        or polya_end < adapter_end
+        or polya_end - adapter_end <= 2
+    ):
+        return failed_results
+
     # not enough signal after loc to execute checks
     if not less_signal_ok and sig_size < (adapter_end + params.median_shift_window):
-        return (False, np.zeros(5).astype(bool), return_mean, return_var, return_polya_med, return_polya_local_range_, return_med_shift) if return_values else False  # type: ignore
+        return failed_results
 
     if windowed_stats:
-        if polya_end - adapter_end <= params.pA_var_window:
+        if polya_end - adapter_end <= params.pA_var_window + 2:
             polya_var = np.var(calibrated_signal[adapter_end:polya_end])
         else:
             polya_var = np.nanmedian(
@@ -75,7 +96,7 @@ def mean_var_shift_polyA_check(
                 )
             )
 
-        if polya_end - adapter_end <= params.pA_mean_window:
+        if polya_end - adapter_end <= params.pA_mean_window + 2:
             polya_mean = np.mean(calibrated_signal[adapter_end:polya_end])
         else:
             polya_mean = np.nanmedian(
@@ -134,7 +155,7 @@ def mean_var_shift_polyA_check(
         )
         if return_values
         else check_vector.all()
-    )
+    )  # type: ignore
 
 
 @overload

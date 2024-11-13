@@ -1,0 +1,46 @@
+[core]
+max_obs_trace = 16000
+min_obs_adapter = 1000
+max_obs_adapter = 6500
+min_obs_polya = 100
+downscale_factor = 10
+sig_norm_outlier_thresh = 5.0
+
+[cnn_boundaries]
+cnn_detect = true
+model_name = "rna004_130bps@v0.2.3.pth"
+polya_cand_k = 10
+fallback_to_llr_short_reads = true
+
+[llr_boundaries]
+llr_detect = false
+adapter_peak_prominence = 1.0
+adapter_peak_rel_height = 1.0
+adapter_peak_width = 1000
+polya_peak_prominence = 1.0
+polya_peak_rel_height = 0.5
+polya_peak_width = 50
+
+[mvs_polya]
+mvs_detect_check = true
+mvs_detect_overwrite = false
+
+search_window = 500
+pA_mean_window = 20
+pA_var_window = 100
+pA_var_range = [-inf, 30.0]
+median_shift_range = [5.0, inf]
+median_shift_window = 1000
+polyA_med_range = [-inf, inf]
+polyA_local_range = [-inf, inf]
+pA_mean_adapter_med_scale_range = [1.3, inf]
+
+[real_range]
+detect_open_pores = true
+real_signal_check = true
+mean_window = 300
+mean_start_range = [-inf, inf]
+mean_end_range = [-inf, inf]
+max_obs_local_range = 5000
+local_range = [7.0, 35.0]
+adapter_mad_range = [3.0, 12.0]

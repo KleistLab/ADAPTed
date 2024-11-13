@@ -7,41 +7,64 @@ Contact: w.vandertoorn@fu-berlin.de
 """
 
 import importlib.resources as pkg_resources
+import logging
+import os
 from dataclasses import dataclass
 from typing import Any, MutableMapping, Optional, Tuple, Union
-import logging
-import toml
 
+import toml
+from adapted import models
+from adapted._version import __version__
 from adapted.config import config_files
 from adapted.config.base import BaseConfig, NestedConfig, load_nested_config_from_file
 
-from adapted._version import __version__
+
+@dataclass
+class CoreConfig(BaseConfig):
+    min_obs_adapter: int = 1000
+    max_obs_adapter: int = 6500
+    min_obs_polya: int = 100
+    downscale_factor: int = 10
+    max_obs_trace: int = 16000
+
+    sig_norm_outlier_thresh: float = 5.0
+
+
+@dataclass
+class CNNBoundariesConfig(BaseConfig):
+    cnn_detect: bool = True
+    model_name: str = "rna004_130bps@v0.2.3.pth"
+    polya_cand_k: int = 15
+    fallback_to_llr_short_reads: bool = True
+
+    def __post_init__(self):
+        if self.cnn_detect:
+            if self.model_name == "" or self.model_name is None:
+                raise ValueError("model_name is required")
+            elif not os.path.exists(self.model_name):
+                try:
+                    with pkg_resources.path(models, self.model_name) as repo_path:
+                        if os.path.exists(repo_path):
+                            pass
+                        else:
+                            raise FileNotFoundError(
+                                f"model_name does not exist in package resources: {self.model_name}"
+                            )
+                except FileNotFoundError:
+                    raise FileNotFoundError(
+                        f"model_name does not exist: {self.model_name}"
+                    )
+
+
+@dataclass
+class CNNModelConfig(BaseConfig):
+    downscale_factor: int = 10
+    model_name: str = "rna004_130bps@v0.2.3.pth"
 
 
 @dataclass
 class LLRBoundariesConfig(BaseConfig):
-    # default values RNA004
-
-    sig_norm_winsor_window: int = 5
-    sig_norm_outlier_thresh: float = 5.0
-
-    min_obs_adapter: int = 1500
-    max_obs_trace: int = 6500
-
-    # in case of polya determination based on early stopping, this should be a small value
-    adapter_trace_tail_trim: int = 5
-    adapter_trace_stride: int = 20
-
-    min_obs_polya: int = 100
-
-    # polya_trace_start < min_obs_polya helps with polyA detection
-    polya_trace_start: int = 40
-    polya_trace_stride: int = 5
-
-    adapter_trace_early_stop_window: int = 1000
-    adapter_trace_early_stop_stride: int = 500
-    polya_trace_early_stop_window: int = 100
-    polya_trace_early_stop_stride: int = 20
+    llr_detect: bool = False
 
     adapter_peak_prominence: float = 1.0
     adapter_peak_rel_height: float = 1.0
@@ -50,12 +73,6 @@ class LLRBoundariesConfig(BaseConfig):
     polya_peak_prominence: float = 1.0
     polya_peak_rel_height: float = 0.5
     polya_peak_width: int = 50
-
-    refine_polya_atol: int = 20
-    refine_smooth_sigma: int = 10
-    refine_max_adapter_end_adjust: int = (
-        250  # adjustments to the adapter end greater than this value are likely incorrect and will be ignored
-    )
 
 
 @dataclass
@@ -108,9 +125,7 @@ class StreamingConfig(BaseConfig):
     # default values RNA002
 
     min_obs_adapter: int = 2500
-    min_obs_post_loc: int = (
-        300  # used for median shift calculation and polyA statistics; determines min offset between polyA and chunk_end
-    )
+    min_obs_post_loc: int = 300
     search_increment_step: int = 100
 
     pA_mean_window: int = 20
@@ -128,32 +143,58 @@ class StreamingConfig(BaseConfig):
 
 @dataclass
 class SigProcConfig(NestedConfig):
+    core: CoreConfig = CoreConfig()
     llr_boundaries: LLRBoundariesConfig = LLRBoundariesConfig()
     mvs_polya: MVSPolyAConfig = MVSPolyAConfig()
     real_range: RealRangeConfig = RealRangeConfig()
     streaming: Optional[StreamingConfig] = None
+    cnn_boundaries: CNNBoundariesConfig = CNNBoundariesConfig()
+
+    primary_method: Optional[str] = None
+    primary_config: Optional[Union[LLRBoundariesConfig, CNNBoundariesConfig]] = None
 
     def __post_init__(self):
-        self.sig_preload_size = (
-            self.llr_boundaries.max_obs_trace
-            + (
+        self.update_primary_method()
+        self.update_sig_preload_size()
+
+    def update_sig_preload_size(self):
+        self.sig_preload_size = self.core.max_obs_trace + (  # type: ignore
+            (
                 self.mvs_polya.search_window
                 + max(self.mvs_polya.median_shift_window, self.mvs_polya.polyA_window)
             )
-            if self.mvs_polya.mvs_detect_check
+            if (self.mvs_polya.mvs_detect_check)
             else 0
         )
 
-    def update_sig_preload_size(self):
-        self.sig_preload_size = (
-            self.llr_boundaries.max_obs_trace
-            + (
-                self.mvs_polya.search_window
-                + max(self.mvs_polya.median_shift_window, self.mvs_polya.polyA_window)
-            )
-            if self.mvs_polya.mvs_detect_check
-            else 0
-        )
+    def update_primary_method(self):
+        llr_detect = self.llr_boundaries.llr_detect
+        cnn_detect = self.cnn_boundaries.cnn_detect
+        if llr_detect and cnn_detect:
+            raise ValueError("Both LLR and CNN are enabled, please choose one")
+        elif llr_detect:
+            self.primary_method = "llr"
+            self.primary_config = self.llr_boundaries
+        elif cnn_detect:
+            self.primary_method = "cnn"
+            self.primary_config = self.cnn_boundaries
+        else:
+            raise ValueError("No primary method is enabled")
+
+        self.check_cnn_downscale_factor()
+
+    def check_cnn_downscale_factor(self):
+        if self.primary_method != "cnn":
+            return
+        with pkg_resources.path(models, "config.toml") as config_path:
+            model_config = toml.load(config_path)[
+                self.cnn_boundaries.model_name.replace("@", "_").replace(".", "_")
+            ]
+
+        if model_config["downscale_factor"] != self.core.downscale_factor:
+            msg = "CNN downscale factor and core downscale factor do not match"
+            logging.error(msg)
+            raise ValueError(msg)
 
 
 def config_name_to_dict(config_name: str) -> Union[dict, MutableMapping[str, Any]]:

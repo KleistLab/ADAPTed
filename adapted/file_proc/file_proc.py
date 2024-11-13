@@ -7,55 +7,25 @@ Contact: w.vandertoorn@fu-berlin.de
 """
 
 import concurrent.futures
+import logging
 import multiprocessing
 import os
 import signal
 import sys
 import time
-import logging
 import traceback
 from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import Process, Manager
-from dataclasses import dataclass
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Set,
-    Tuple,
-)
+from multiprocessing import Manager, Process
+from typing import Any, Callable, Dict, List, Set, Tuple
 
 import numpy as np
-from tqdm import tqdm
-
-from pod5 import Reader
-
 from adapted.config.config import Config
-from adapted.detect.combined import DetectResults
-
+from adapted.container_types import ReadResult
+from pod5 import Reader
+from tqdm import tqdm
 
 # Global flag to track if CTRL+C signal has been received
 CTRL_C_RECEIVED = False
-
-
-@dataclass
-class ReadResult:
-    read_id: Optional[str] = None
-    success: bool = True
-    fail_reason: Optional[str] = None
-
-    detect_results: Optional[DetectResults] = None
-
-    def to_summary_dict(self) -> Dict[str, Any]:
-        detect_dict = self.detect_results.to_dict() if self.detect_results else {}
-        detect_dict.pop("fail_reason", None)
-        return {
-            "read_id": self.read_id,
-            **detect_dict,
-            "fail_reason": self.fail_reason,
-        }
 
 
 def signal_handler(sig, frame):
@@ -71,17 +41,19 @@ def load_signals_in_mem(
     ids: List[str],
     max_obs: int = 40000,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, List[str]]:
-    signals = np.zeros((len(ids), max_obs), dtype=np.float32)
-    in_arr_lengths = np.zeros(len(ids), dtype=np.int32)
-    full_lengths = np.zeros(len(ids), dtype=np.int32)
+    signals = np.empty((len(ids), max_obs), dtype=np.float32)
+    in_arr_lengths = np.empty(len(ids), dtype=np.int32)
+    full_lengths = np.empty(len(ids), dtype=np.int32)
     read_ids = []
 
     for i_id, read in enumerate(file_obj.reads(selection=ids)):
-        s = np.array(read.signal_pa)  # calibrated signal (pA)
-        l = min(s.size, max_obs)
-        signals[i_id, :l] = s[:l]
+        l = min(read.num_samples, max_obs)
+        s = read.signal_pa[:l]  # calibrated signal (pA)
+        signals[i_id, :l] = s
+        if l < max_obs:
+            signals[i_id, l:] = np.nan
         in_arr_lengths[i_id] = l
-        full_lengths[i_id] = s.size
+        full_lengths[i_id] = read.num_samples
         read_ids.append(str(read.read_id))
 
     if not set(read_ids) == set(ids):
@@ -100,8 +72,8 @@ def result_processor(
     result_batch_size,
     result_fn,
     result_kwargs,
-    bidx_passed=0,
-    bidx_failed=0,
+    bidx_pass=0,
+    bidx_fail=0,
 ):
     pbar = tqdm(total=total, desc="Processing reads", file=sys.stdout)
     failed, passed = [], []
@@ -119,11 +91,11 @@ def result_processor(
                     result_fn(
                         "pass",
                         results=passed,
-                        batch_idx=bidx_passed,
+                        batch_idx=bidx_pass,
                         **result_kwargs,
                     )
                     n_passed += result_batch_size
-                    bidx_passed += 1
+                    bidx_pass += 1
                     passed = []
             else:
                 failed.append(res)
@@ -131,19 +103,19 @@ def result_processor(
                     result_fn(
                         "fail",
                         results=failed,
-                        batch_idx=bidx_failed,
+                        batch_idx=bidx_fail,
                         **result_kwargs,
                     )
                     n_failed += result_batch_size
-                    bidx_failed += 1
+                    bidx_fail += 1
                     failed = []
         time.sleep(0.1)  # Avoid busy waiting
 
     # Process remaining results
     if passed:
-        result_fn("pass", results=passed, batch_idx=bidx_passed, **result_kwargs)
+        result_fn("pass", results=passed, batch_idx=bidx_pass, **result_kwargs)
     if failed:
-        result_fn("fail", results=failed, batch_idx=bidx_failed, **result_kwargs)
+        result_fn("fail", results=failed, batch_idx=bidx_fail, **result_kwargs)
 
     pbar.close()
     logging.info(f"Read processing completed in {pbar.format_dict['elapsed']:.2f}s")
@@ -157,11 +129,42 @@ def result_processor(
     )
 
 
-def worker(
+def worker_task_per_batch(
     filename: str,
     minibatch_ids: List[str],
     config: Config,
     task_fn: Callable,
+    task_kwargs: Dict[str, Any],
+    shared_results: List[ReadResult],
+):
+    try:
+        with Reader(path=filename) as file_obj:
+            signals, _, full_sig_lengths, read_ids = load_signals_in_mem(
+                file_obj,
+                minibatch_ids,
+                max_obs=config.sig_proc.sig_preload_size,
+            )
+
+        results = task_fn(
+            batch_of_signals=signals,
+            full_lengths=full_sig_lengths,
+            read_ids=read_ids,
+            spc=config.sig_proc,
+            **task_kwargs,
+        )
+        shared_results.extend(results)
+
+    except Exception as e:
+        logging.error(f"Error in worker process: {e}")
+        logging.error(traceback.format_exc())
+
+
+def worker_task_per_read(
+    filename: str,
+    minibatch_ids: List[str],
+    config: Config,
+    task_fn: Callable,
+    task_kwargs: Dict[str, Any],
     shared_results: List[ReadResult],
 ):
     try:
@@ -183,7 +186,7 @@ def worker(
                     full_sig_len=full_sig_len,
                     read_id=read_id,
                     spc=config.sig_proc,
-                    **config.task.dict(),
+                    **task_kwargs,
                 )
                 results.append(result)
             except Exception as e:
@@ -205,9 +208,12 @@ def process_in_batches(
     file_read_id_map: Dict[str, List[str]],
     config: Config,
     task_fn: Callable,
+    task_kwargs: Dict[str, Any],
     result_fn: Callable,
 ):
     max_concurrent_tasks = config.batch.num_proc or multiprocessing.cpu_count()
+
+    worker = worker_task_per_batch
 
     with Manager() as manager:
         shared_results: List[ReadResult] = manager.list()  # type: ignore
@@ -220,8 +226,8 @@ def process_in_batches(
                 config.batch.batch_size,
                 result_fn,
                 config.output.dict(),
-                config.batch.bidx_passed,
-                config.batch.bidx_failed,
+                config.batch.bidx_pass,
+                config.batch.bidx_fail,
             ),
         )
         result_process.start()
@@ -239,6 +245,7 @@ def process_in_batches(
                         minibatch_ids,
                         config,
                         task_fn,
+                        task_kwargs,
                         shared_results,
                     )
                     futures.append(future)
@@ -304,23 +311,10 @@ def get_file_read_id_map(config: Config) -> Dict[str, List[str]]:
                 if read_id not in processed_reads
             ]
         n_found_read_ids -= len(processed_reads)
-        config.batch.bidx_passed = max_pass_bidx + 1
-        config.batch.bidx_failed = max_fail_bidx + 1
+        config.batch.bidx_pass = max_pass_bidx + 1
+        config.batch.bidx_fail = max_fail_bidx + 1
 
-    if config.input.continue_from:
-        processed_reads, max_pass_bidx, max_fail_bidx = scan_processed_reads(
-            config.input.continue_from
-        )
-
-        for filename in file_read_id_map:
-            file_read_id_map[filename] = [
-                read_id
-                for read_id in file_read_id_map[filename]
-                if read_id not in processed_reads
-            ]
-        n_found_read_ids -= len(processed_reads)
-        config.batch.bidx_passed = max_pass_bidx + 1
-        config.batch.bidx_failed = max_fail_bidx + 1
+    config.input.n_reads = n_found_read_ids
 
     remaining_str = "remaining" if config.input.continue_from else ""
 
@@ -361,6 +355,7 @@ def process(
     file_read_id_map: Dict[str, List[str]],
     config: Config,
     task_fn: Callable,
+    task_kwargs: Dict[str, Any],
     results_fn: Callable,
 ) -> None:
     # catch ctrl+c
@@ -371,6 +366,7 @@ def process(
             file_read_id_map=file_read_id_map,
             config=config,
             task_fn=task_fn,
+            task_kwargs=task_kwargs,
             result_fn=results_fn,
         )
 

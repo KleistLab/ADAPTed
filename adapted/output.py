@@ -10,7 +10,6 @@ from typing import List
 
 import numpy as np
 import pandas as pd
-
 from adapted.file_proc.file_proc import ReadResult
 
 

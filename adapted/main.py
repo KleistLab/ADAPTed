@@ -6,15 +6,20 @@ Contact: w.vandertoorn@fu-berlin.de
 
 """
 
+import logging
 import os
 import sys
 import time
-import logging
 
+from adapted.detect.cnn import load_cnn_model
 from adapted.file_proc.file_proc import get_file_read_id_map, process
-from adapted.file_proc.tasks import process_preloaded_signal, save_results_batch
-from adapted.parser import parse_args
+from adapted.file_proc.tasks import (
+    process_preloaded_signal_combined_detect_cnn,
+    process_preloaded_signal_combined_detect_llr,
+    save_results_batch,
+)
 from adapted.logger import setup_logger
+from adapted.parser import parse_args
 
 
 def main(args=None):
@@ -56,10 +61,20 @@ def main(args=None):
     # save spc that were used
     config.sig_proc.to_toml(os.path.join(config.output.output_dir, "config.toml"))
 
+    if config.sig_proc.primary_method == "cnn":
+        task_fn = process_preloaded_signal_combined_detect_cnn
+        task_kwargs = {
+            "model": load_cnn_model(config.sig_proc.cnn_boundaries.model_name)
+        }
+    else:
+        task_fn = process_preloaded_signal_combined_detect_llr
+        task_kwargs = {}
+
     process(
         file_read_id_map=file_read_id_map,
         config=config,
-        task_fn=process_preloaded_signal,
+        task_fn=task_fn,
+        task_kwargs=task_kwargs,
         results_fn=save_results_batch,
     )
     logging.info("Done.")

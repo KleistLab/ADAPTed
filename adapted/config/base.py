@@ -6,15 +6,16 @@ Contact: w.vandertoorn@fu-berlin.de
 
 """
 
+import logging
 import pprint
+import sys
+from copy import deepcopy
 from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 from typing import Any, MutableMapping, Tuple, Type, TypeVar, Union, get_args
-import logging
 
 import numpy as np
 import toml
-import sys
 
 
 def get_field_type_annotation(field):
@@ -29,11 +30,24 @@ def get_field_type_annotation(field):
 
 @dataclass
 class BaseConfig:
+
     def pretty_print(self):
         return pprint.pformat(asdict(self), sort_dicts=False)
 
     def dict(self):
         return asdict(self)
+
+    def __setitem__(self, key: str, value: Any) -> None:
+        """Enables dictionary-style item assignment (e.g., config['key'] = value)."""
+        if not hasattr(self, key):
+            raise KeyError(f"'{type(self).__name__}' has no attribute '{key}'")
+        setattr(self, key, value)
+
+    def __getitem__(self, key: str) -> Any:
+        """Enables dictionary-style item access (e.g., value = config['key'])."""
+        if not hasattr(self, key):
+            raise KeyError(f"'{type(self).__name__}' has no attribute '{key}'")
+        return getattr(self, key)
 
     def typed_dict(self):
         typed_dict = {}
@@ -71,6 +85,10 @@ class BaseConfig:
     def to_toml(self, file_path: str):
         with open(file_path, "w") as toml_file:
             toml.dump(self.typed_dict(), toml_file)
+
+    def copy(self):
+        """Returns a deep copy of the config object."""
+        return deepcopy(self)
 
 
 @dataclass

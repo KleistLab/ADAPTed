@@ -7,21 +7,19 @@ Contact: w.vandertoorn@fu-berlin.de
 """
 
 import argparse
+import json
 import os
-from argparse import RawTextHelpFormatter
 import shutil
 import uuid
-import json
+from argparse import RawTextHelpFormatter
 
 import pandas as pd
-
+from adapted._version import __version__
 from adapted.config.base import load_nested_config_from_file
 from adapted.config.config import Config
-from adapted.config.file_proc import BatchConfig, InputConfig, OutputConfig, TaskConfig
+from adapted.config.file_proc import BatchConfig, InputConfig, OutputConfig
 from adapted.config.sig_proc import SigProcConfig, get_chemistry_specific_config
 from adapted.io_utils import input_to_filelist
-
-from adapted._version import __version__
 
 
 def str2bool(v):
@@ -71,10 +69,11 @@ parser_continue.add_argument(
     ),
 )
 
+
 # make performance group arguments only visible in the subparser
 performance_group = parser_detect.add_argument_group("performance")
 performance_group.add_argument(
-    "-p",
+    "-j",
     "--num_proc",
     type=int,
     default=None,
@@ -85,6 +84,7 @@ performance_group.add_argument(
 )
 
 performance_group.add_argument(
+    "-b",
     "--batch_size",
     type=int,
     default=4000,
@@ -92,9 +92,10 @@ performance_group.add_argument(
 )
 
 performance_group.add_argument(
+    "-s",
     "--minibatch_size",
     type=int,
-    default=50,
+    default=1000,
     help=(
         "Number of reads per worker. These reads are loaded into memory prior to"
         " processing. Choose depending on the max_obs_adapter value and the amount"
@@ -104,6 +105,7 @@ performance_group.add_argument(
 
 processing_group = parser_detect.add_argument_group("processing")
 processing_group.add_argument(
+    "-i",
     "--input",
     type=str,
     nargs="+",
@@ -114,6 +116,7 @@ processing_group.add_argument(
 )
 
 processing_group.add_argument(
+    "-o",
     "--output",
     type=str,
     default=None,
@@ -128,6 +131,7 @@ processing_group.add_argument(
 )
 
 processing_group.add_argument(
+    "-c",
     "--chemistry",
     type=str,
     choices=["RNA002", "RNA004"],
@@ -143,13 +147,6 @@ processing_group.add_argument(
         "Setting this argument overrides the default value in the configuration file. "
         "Use this with a large value for rerunning the detection of truncated reads. Default is None."
     ),
-)
-
-processing_group.add_argument(
-    "--save_llr_trace",
-    type=str2bool,
-    default=False,
-    help="Save the LLR trace for each read. Warning: this can produce very large files.",
 )
 
 processing_group.add_argument(
@@ -232,10 +229,6 @@ def parse_args() -> Config:
         continue_from=args.continue_from if "continue_from" in args else "",
     )
 
-    task_config = TaskConfig(
-        llr_return_trace=args.save_llr_trace,
-    )
-
     batch_config = BatchConfig(
         num_proc=args.num_proc,
         batch_size=args.batch_size,
@@ -244,7 +237,6 @@ def parse_args() -> Config:
 
     output_config = OutputConfig(
         output_dir=run_dir,
-        save_llr_trace=args.save_llr_trace,
     )
 
     if args.config:  # when config is provided, chemistry is ignored
@@ -255,8 +247,9 @@ def parse_args() -> Config:
         )  # Use chemistry if config is not provided
 
     if args.max_obs_trace:
-        spc.llr_boundaries.max_obs_trace = args.max_obs_trace
+        spc.core.max_obs_trace = args.max_obs_trace
 
+    spc.update_primary_method()
     spc.update_sig_preload_size()
 
     # Create run_dir if it doesn't exist
@@ -271,6 +264,5 @@ def parse_args() -> Config:
         input=input_config,
         output=output_config,
         batch=batch_config,
-        task=task_config,
         sig_proc=spc,
     )

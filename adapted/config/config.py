@@ -9,7 +9,7 @@ Contact: w.vandertoorn@fu-berlin.de
 from dataclasses import dataclass
 
 from adapted.config.base import NestedConfig
-from adapted.config.file_proc import BatchConfig, InputConfig, OutputConfig, TaskConfig
+from adapted.config.file_proc import BatchConfig, InputConfig, OutputConfig
 from adapted.config.sig_proc import SigProcConfig
 
 
@@ -17,6 +17,5 @@ from adapted.config.sig_proc import SigProcConfig
 class Config(NestedConfig):
     input: InputConfig = InputConfig()
     output: OutputConfig = OutputConfig()
-    task: TaskConfig = TaskConfig()
     batch: BatchConfig = BatchConfig()
     sig_proc: SigProcConfig = SigProcConfig()
