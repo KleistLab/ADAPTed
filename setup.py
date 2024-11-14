@@ -50,7 +50,7 @@ setup(
     include_package_data=True,
     package_data={
         "adapted.config": ["config_files/*.toml"],
-        "adapted.models": ["*.pth"],
+        "adapted.models": ["*.pth", "*.toml"],
     },
     ext_modules=cythonize(ext_modules, language_level="3"),
     cmdclass={"build_ext": build_ext},
