@@ -4,6 +4,7 @@ channels:
   - bioconda
   - anaconda
   - defaults
+  - pytorch
 dependencies:
   - python=3.8
   - pip
@@ -20,5 +21,5 @@ dependencies:
   - setuptools
   - wheel
   - attrs
-  - torch=2.4.1
+  - pytorch=2.4.1
 

@@ -8,7 +8,7 @@ sig_norm_outlier_thresh = 5.0
 
 [cnn_boundaries]
 cnn_detect = false
-model_name = "rna002_70bps@v0.2.3.pth"
+model_name = "rna002_70bps@v0.2.4.pth"
 polya_cand_k = 15
 fallback_to_llr_short_reads = true
 
@@ -43,3 +43,11 @@ mean_end_range = [-inf, inf]
 max_obs_local_range = 5000
 local_range = [7.0, 35.0]
 adapter_mad_range = [3.0, 12.0]
+
+[med_shift]
+detect_med_shift = false
+med_shift_window = 1000
+med_shift_range = [5.0, inf]
+
+[rna_start_peak]
+detect_rna_start_peak = false

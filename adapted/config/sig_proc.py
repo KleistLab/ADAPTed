@@ -10,7 +10,7 @@ import importlib.resources as pkg_resources
 import logging
 import os
 from dataclasses import dataclass
-from typing import Any, MutableMapping, Optional, Tuple, Union
+from typing import Any, Dict, MutableMapping, Optional, Tuple, Union
 
 import toml
 from adapted import models
@@ -33,7 +33,7 @@ class CoreConfig(BaseConfig):
 @dataclass
 class CNNBoundariesConfig(BaseConfig):
     cnn_detect: bool = True
-    model_name: str = "rna004_130bps@v0.2.3.pth"
+    model_name: str = "rna004_130bps@v0.2.4.pth"
     polya_cand_k: int = 15
     fallback_to_llr_short_reads: bool = True
 
@@ -59,7 +59,7 @@ class CNNBoundariesConfig(BaseConfig):
 @dataclass
 class CNNModelConfig(BaseConfig):
     downscale_factor: int = 10
-    model_name: str = "rna004_130bps@v0.2.3.pth"
+    model_name: str = "rna004_130bps@v0.2.4.pth"
 
 
 @dataclass
@@ -95,6 +95,23 @@ class MVSPolyAConfig(BaseConfig):
         1.3,
         None,
     )
+
+
+@dataclass
+class RNAStartPeakConfig(BaseConfig):
+    detect_rna_start_peak: bool = False
+    downscale_factor: int = 10
+    start_peak_max_idx: int = 150
+    offset1: int = 10
+    offset2: int = 100
+    open_pore_pa: float = 195.0
+
+
+@dataclass
+class MedShiftConfig(BaseConfig):
+    detect_med_shift: bool = False
+    med_shift_window: int = 2000
+    med_shift_range: Tuple[Optional[float], Optional[float]] = (20.0, None)
 
 
 @dataclass
@@ -150,8 +167,13 @@ class SigProcConfig(NestedConfig):
     streaming: Optional[StreamingConfig] = None
     cnn_boundaries: CNNBoundariesConfig = CNNBoundariesConfig()
 
+    med_shift: MedShiftConfig = MedShiftConfig()
+    rna_start_peak: RNAStartPeakConfig = RNAStartPeakConfig()
+
     primary_method: Optional[str] = None
-    primary_config: Optional[Union[LLRBoundariesConfig, CNNBoundariesConfig]] = None
+    primary_config: Optional[
+        Union[LLRBoundariesConfig, CNNBoundariesConfig, RNAStartPeakConfig]
+    ] = None
 
     def __post_init__(self):
         self.update_primary_method()
@@ -170,18 +192,20 @@ class SigProcConfig(NestedConfig):
     def update_primary_method(self):
         llr_detect = self.llr_boundaries.llr_detect
         cnn_detect = self.cnn_boundaries.cnn_detect
-        if llr_detect and cnn_detect:
-            raise ValueError("Both LLR and CNN are enabled, please choose one")
+        start_peak_detect = self.rna_start_peak.detect_rna_start_peak
+        if (llr_detect + cnn_detect + start_peak_detect) != 1:
+            raise ValueError("Exactly one primary method must be enabled")
         elif llr_detect:
             self.primary_method = "llr"
             self.primary_config = self.llr_boundaries
         elif cnn_detect:
             self.primary_method = "cnn"
             self.primary_config = self.cnn_boundaries
-        else:
-            raise ValueError("No primary method is enabled")
 
-        self.check_cnn_downscale_factor()
+            self.check_cnn_downscale_factor()
+        elif start_peak_detect:
+            self.primary_method = "start_peak"
+            self.primary_config = self.rna_start_peak
 
     def check_cnn_downscale_factor(self):
         if self.primary_method != "cnn":
@@ -197,7 +221,9 @@ class SigProcConfig(NestedConfig):
             raise ValueError(msg)
 
 
-def config_name_to_dict(config_name: str) -> Union[dict, MutableMapping[str, Any]]:
+def config_name_to_dict(
+    config_name: str,
+) -> Dict[str, Any]:
     with pkg_resources.path(config_files, f"{config_name}.toml") as config_path:
         return toml.load(config_path)
 

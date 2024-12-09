@@ -10,7 +10,8 @@ from typing import List
 
 import numpy as np
 import pandas as pd
-from adapted.file_proc.file_proc import ReadResult
+
+from adapted.container_types import ReadResult
 
 
 def save_traces(results: List[ReadResult], filename: str) -> None:

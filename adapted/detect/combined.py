@@ -27,6 +27,7 @@ from adapted.detect.mvs import (
 )
 from adapted.detect.normalize import normalize_signal
 from adapted.detect.real_range import real_range_check
+from adapted.detect.start_peak import detect_rna_start_peak
 from adapted.detect.utils import in_range, range_is_empty
 from adapted.partition.signal_partitions import calc_partitions_from_vals
 
@@ -308,6 +309,52 @@ def combined_detect_cnn(
     return res if len(res) > 1 else res[0]
 
 
+def combined_detect_start_peak(
+    batch_of_signals: np.ndarray,
+    full_signal_lens: np.ndarray,
+    spc: SigProcConfig,
+) -> List[DetectResults]:
+
+    df_res = detect_rna_start_peak(batch_of_signals, full_signal_lens, spc)
+
+    list_of_detect_res = []
+    read_i = 0
+    for signal, full_signal_len in zip(batch_of_signals, full_signal_lens):
+        res = df_res.iloc[read_i]
+        boundaries = Boundaries(
+            adapter_start=0,
+            adapter_end=res.next_greater_idx,
+            polya_end=res.next_greater_idx,
+        )
+        try:
+            detect_res = validate_boundaries(
+                signal[:full_signal_len], boundaries, spc, full_signal_len
+            )
+            detect_res.start_peak_idx = res.start_peak_idx
+            detect_res.start_peak_pa = res.start_peak_pa
+            detect_res.start_peak_next_max_idx = res.next_greater_idx
+            detect_res.start_peak_next_max_pa = res.next_greater_pa
+            detect_res.start_peak_open_pore_idx = res.open_pore_idx
+            detect_res.start_peak_open_pore_type = res.flagged_type
+
+            flagged = res.flagged_type is not None
+            false_before = not detect_res.success
+            detect_res.success = detect_res.success and not flagged
+            detect_res.fail_reason = (
+                detect_res.fail_reason + ("+" + res.flagged_type)
+                if false_before and flagged
+                else detect_res.fail_reason
+            )
+            list_of_detect_res.append(detect_res)
+
+        except Exception as e:
+            list_of_detect_res.append(DetectResults(success=False, fail_reason=str(e)))
+
+        read_i += 1
+
+    return list_of_detect_res
+
+
 def validate_boundaries(signal, boundaries, spc, full_signal_len):
     spc = deepcopy(
         spc
@@ -319,7 +366,6 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len):
     )  # might be updated TODO: check if default != None causes issues here
 
     polya_end_best = boundaries.polya_end
-    # polya_end = boundaries.polya_end  # might be updated
 
     success = True
     mvs_adapter_end = None
@@ -337,6 +383,8 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len):
     real_adapter_mean_start = None
     real_adapter_mean_end = None
     real_adapter_local_range = None
+
+    adapter_rna_median_shift = None
 
     adapter_mad = None
     adapter_med = None
@@ -517,6 +565,20 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len):
                     polya_end_best = polya_end
                     break
 
+    if success and spc.med_shift.detect_med_shift:
+        adapter_rna_median_shift = np.median(
+            signal[
+                adapter_end : min(
+                    adapter_end + spc.med_shift.med_shift_window, full_signal_len
+                )
+            ]
+        ) - np.median(
+            signal[max(adapter_end - spc.med_shift.med_shift_window, 0) : adapter_end]
+        )
+        if not in_range(adapter_rna_median_shift, *spc.med_shift.med_shift_range):
+            success = False
+            fail_reason = "Median shift check failed"
+
     partitions = calc_partitions_from_vals(
         signal[:full_signal_len],
         adapter_start,
@@ -554,6 +616,7 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len):
         mvs_detect_polya_med=mvs_detect_polya_med,
         mvs_detect_polya_local_range=mvs_detect_polya_local_range,
         mvs_detect_med_shift=mvs_detect_med_shift,
+        adapter_rna_median_shift=adapter_rna_median_shift,
         real_adapter_mean_start=real_adapter_mean_start,
         real_adapter_mean_end=real_adapter_mean_end,
         real_adapter_local_range=real_adapter_local_range,

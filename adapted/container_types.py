@@ -51,11 +51,23 @@ class DetectResults:
     rna_preloaded_med: Optional[float] = None
     rna_preloaded_mad: Optional[float] = None
 
+    start_peak_idx: Optional[int] = None
+    start_peak_pa: Optional[float] = None
+    start_peak_next_max_idx: Optional[int] = None
+    start_peak_next_max_pa: Optional[float] = None
+    start_peak_open_pore_idx: Optional[int] = None
+    start_peak_open_pore_type: Optional[str] = None
+
+    adapter_rna_median_shift: Optional[float] = None
+
     llr_adapter_end: Optional[int] = None
     llr_polya_end: Optional[int] = None
 
     cnn_adapter_end: Optional[int] = None
     cnn_polya_end: Optional[int] = None
+
+    start_peak_adapter_end: Optional[int] = None
+    start_peak_polya_end: Optional[int] = None  # NOTE: not used
 
     llr_trace: Optional[np.ndarray] = None
     llr_adapter_end_adjust: Optional[int] = None

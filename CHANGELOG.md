@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.2.4] - 2024-12-09
+
+### Changed
+
+- Major redesign of the `file_proc` module. Reads are processed in minibatches. The `adapted.file_proc.file_proc` submodule has been removed and the functionality has been moved to `adapted.file_proc`.
+
+### Fixed
+
+- Non runnable detection workflow caused by partial code updates.
+
+### Added
+
+- A new `detect_rna_start_peak` and `combined_detect_start_peak` function that use the start peak detection method to provide a quick alternative for e.g. tRNA and custom adapter workflows.
+- A new `med_shift` validation workflow that uses the median shift method between adapter and pos-adapter signal to validate the detected boundaries. Does not require a polyA tail signal.
+
 ## [v0.2.3] - 2024-11-13
 
 ### Fixed

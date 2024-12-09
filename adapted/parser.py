@@ -14,6 +14,7 @@ import uuid
 from argparse import RawTextHelpFormatter
 
 import pandas as pd
+
 from adapted._version import __version__
 from adapted.config.base import load_nested_config_from_file
 from adapted.config.config import Config
@@ -231,7 +232,7 @@ def parse_args() -> Config:
 
     batch_config = BatchConfig(
         num_proc=args.num_proc,
-        batch_size=args.batch_size,
+        batch_size_output=args.batch_size,
         minibatch_size=args.minibatch_size,
     )
 

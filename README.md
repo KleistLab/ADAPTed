@@ -63,7 +63,7 @@ Reads for which no adapter was detected, are described in the 'failed_reads_XX.c
 These files contain the following columns:
 
 - `read_id` : the read ID of the read.
-- `read_length` : the length of the read, in number of samples in the raw signal.
+- `signal_len` : the length of the read, in number of samples in the raw signal.
 - `preloaded` : the length of the preloaded signal, in number of samples in the raw signal.
 - `adapter_start` : the start coordinate of the adapter signal in the raw signal.
 - `adapter_end` : the end coordinate of the adapter signal, in the raw signal.
@@ -79,32 +79,43 @@ These files contain the following columns:
 - `polya_std` : the standard deviation of the poly(A) signal, in pico amperes.
 - `polya_med` : the median of the poly(A) signal, in pico amperes.
 - `polya_mad` : the median absolute deviation of the poly(A) signal, in pico amperes.
-- `polya_truncated` : whether the poly(A) signal was truncated by the signal preload logic during detection. See [Signal preloading](#signal-preloading) for more details. When the poly(A) signal stats are of interest, consider rerunning these reads with a larger `--max_obs_trace`.
+- `polya_truncated` : whether the poly(A) signal was truncated by the signal preload logic during detection.
+- `polya_candidates` : candidate positions for poly(A) tail detection.
 - `rna_preloaded_start` : the start coordinate of the RNA signal in the raw signal.
-- `rna_preloaded_len` : the length of the (preloaded) RNA signal, in number of samples in the raw signal. This is the length of the preloaded RNA signal, which may be vastly shorter than the full read length.
-- `rna_preloaded_mean` : the mean of the (preloaded) RNA signal, in pico amperes.
-- `rna_preloaded_std` : the standard deviation of the (preloaded) RNA signal, in pico amperes.
-- `rna_preloaded_med` : the median of the (preloaded) RNA signal, in pico amperes.
-- `rna_preloaded_mad` : the median absolute deviation of the (preloaded) RNA signal, in pico amperes.
-- `llr_adapter_end` : the log likelihood ratio-detected end coordinate of the adapter signal.
-- `llr_rel_adapter_end` : the relative coordinate (relative to the FULL read length) of the log likelihood ratio-detected end of the adapter signal.
-- `llr_adapter_end_adjust` : adjustments to the adapter end coordinate, made in llr refinement.
-- `llr_polya_end_adjust` : adjustments to the poly(A) end coordinate, made in llr refinement.
-- `llr_early_stop_pos` : the position of the trace calculation early stop in the raw signal, compare to `llr_adapter_end` and `preloaded` for run time performance analysis (closer to `llr_adapter_end` is better).
-- `mvs_llr_polya_end_adjust_ignored` : whether the poly(A) end adjust during llr refinementwas ignored in the mean-variance-shift method.
-- `mvs_llr_polya_end_to_early_stop` : if `mvs_overwrite` is `True` if can happen that the detected adapter end is downstream of the (incorrectly refined) polya-end, in that case, the polya-end is set to the `llr_early_stop_pos`. It may be wise to filter out such reads.
-- `mvs_adapter_end` : the end coordinate of the adapter signal, as detected or validated using the mean-variance-shift method.
-- `mvs_detect_mean_at_loc` : the local mean of the poly(A) signal.
-- `mvs_detect_var_at_loc` : the local variance of the poly(A) signal.
-- `mvs_detect_polya_med` : the median of the poly(A) signal.
-- `mvs_detect_polya_local_range` : the local range of the poly(A) signal.
-- `mvs_detect_med_shift` : the median shift of the poly(A) signal.
-- `real_adapter_mean_start` : the mean of the adapter signal at the start of the adapter (window).
-- `real_adapter_mean_end` : the mean of the adapter signal at the end of the adapter (window).
-- `real_adapter_local_range` : the local range of the adapter signal.
-- `open_pores` : the detected open pore events in the adapter signal.
-- `llr_detect_log` : the log likelihood ratio detection log messages.
-- `fail_reason` : the reason for the failure of the adapter detection, only present if the adapter detection failed.
+- `rna_preloaded_len` : the length of the preloaded RNA signal, in number of samples.
+- `rna_preloaded_mean` : the mean of the preloaded RNA signal, in pico amperes.
+- `rna_preloaded_std` : the standard deviation of the preloaded RNA signal, in pico amperes.
+- `rna_preloaded_med` : the median of the preloaded RNA signal, in pico amperes.
+- `rna_preloaded_mad` : the median absolute deviation of the preloaded RNA signal, in pico amperes.
+- `start_peak_idx` : index of the initial peak detection.
+- `start_peak_pa` : pico ampere value at the initial peak.
+- `start_peak_next_max_idx` : index of the next maximum peak.
+- `start_peak_next_max_pa` : pico ampere value at the next maximum peak.
+- `start_peak_open_pore_idx` : index of open pore detection from initial peak analysis.
+- `start_peak_open_pore_type` : type of open pore event detected.
+- `adapter_rna_median_shift` : median shift between adapter and RNA signals.
+- `llr_adapter_end` : log likelihood ratio-detected adapter end coordinate.
+- `llr_polya_end` : log likelihood ratio-detected poly(A) end coordinate.
+- `cnn_adapter_end` : CNN-detected adapter end coordinate.
+- `cnn_polya_end` : CNN-detected poly(A) end coordinate.
+- `start_peak_adapter_end` : adapter end coordinate from peak detection.
+- `start_peak_polya_end` : poly(A) end coordinate from peak detection.
+- `llr_adapter_end_adjust` : adjustments to adapter end coordinate in LLR refinement.
+- `llr_polya_end_adjust` : adjustments to poly(A) end coordinate in LLR refinement.
+- `llr_trace_early_stop_pos` : position where trace calculation stopped early.
+- `mvs_llr_polya_end_adjust_ignored` : whether poly(A) end adjustment was ignored in MVS method.
+- `mvs_llr_polya_end_to_early_stop` : if true, poly(A) end was set to early stop position.
+- `mvs_adapter_end` : adapter end coordinate from mean-variance-shift method.
+- `mvs_detect_mean_at_loc` : local mean at detection position.
+- `mvs_detect_var_at_loc` : local variance at detection position.
+- `mvs_detect_polya_med` : median of poly(A) signal from MVS detection.
+- `mvs_detect_polya_local_range` : local range of poly(A) signal from MVS detection.
+- `mvs_detect_med_shift` : median shift detected by MVS method.
+- `real_adapter_mean_start` : mean of adapter signal at start window.
+- `real_adapter_mean_end` : mean of adapter signal at end window.
+- `real_adapter_local_range` : local range of adapter signal.
+- `open_pores` : detected open pore events.
+- `llr_detect_log` : log messages from LLR detection process.
 
 ## Signal preloading
 
