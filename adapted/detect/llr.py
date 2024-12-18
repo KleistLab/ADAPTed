@@ -25,30 +25,6 @@ from scipy.stats import linregress
 ##############################
 
 
-class LLRBoundariesLog:
-    too_little_signal: bool = False
-    no_adapter_end_found: bool = False
-    min_obs_adapter_first_candidate: bool = False
-    min_obs_adapter_only_candidate: bool = False
-    recalc_adapter_trace_with_start_offset: bool = False
-    recalc_adapter_trace_with_start_offset_too_short: bool = False
-    second_try_no_adapter_end_found: bool = False
-    second_try_min_obs_adapter_first_candidate: bool = False
-    second_try_min_obs_adapter_only_candidate: bool = False
-    truncated_polya: bool = False
-    adapter_end_too_close_to_trace_end: bool = False
-    no_polya_end_found: bool = False
-    refine_too_few_extrema: bool = False
-    refine_adapter_end_adjusted_within_atol: bool = False
-    refine_polya_not_poi: bool = False
-    refine_region_too_short: bool = False
-    refine_possible_noisy_polya: bool = False
-    refine_adapter_end_adjusted: bool = False
-
-    def to_string(self):
-        return " ".join([f"{k}" for k, v in self.__dict__.items() if v])
-
-
 @define
 class LLRTrace:
     signal: np.ndarray = field(kw_only=True)

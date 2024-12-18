@@ -10,13 +10,7 @@ class Boundaries:
     adapter_end: int
     polya_end: int
     polya_end_topk: Optional[np.ndarray] = None
-    adapter_end_adjust: Optional[int] = None
-    polya_end_adjust: Optional[int] = None
     trace: Optional[np.ndarray] = None
-    trace_early_stop_pos: Optional[int] = None
-    logstr: Optional[str] = None
-    polya_truncated: Optional[bool] = None
-    debug_logger: Optional[dict] = None
 
 
 @dataclass
@@ -41,7 +35,6 @@ class DetectResults:
     polya_std: Optional[float] = None
     polya_med: Optional[float] = None
     polya_mad: Optional[float] = None
-    polya_truncated: Optional[bool] = None
     polya_candidates: Optional[np.ndarray] = None
 
     rna_preloaded_start: Optional[int] = None
@@ -70,12 +63,6 @@ class DetectResults:
     start_peak_polya_end: Optional[int] = None  # NOTE: not used
 
     llr_trace: Optional[np.ndarray] = None
-    llr_adapter_end_adjust: Optional[int] = None
-    llr_polya_end_adjust: Optional[int] = None
-    llr_trace_early_stop_pos: Optional[int] = None
-
-    mvs_llr_polya_end_adjust_ignored: Optional[bool] = None
-    mvs_llr_polya_end_to_early_stop: Optional[bool] = None
 
     mvs_adapter_end: Optional[int] = None
     mvs_detect_mean_at_loc: Optional[float] = None
@@ -91,7 +78,6 @@ class DetectResults:
     open_pores: Optional[np.ndarray] = None
 
     fail_reason: Optional[str] = None
-    llr_detect_log: Optional[str] = None
 
     def to_dict(self):
         return {

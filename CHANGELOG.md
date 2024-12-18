@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Removed
+
+- Unused detection result attributes `polya_truncated`, `llr_adapter_end_adjust`, `llr_polya_end_adjust`, `llr_trace_early_stop_pos`, `mvs_llr_polya_end_adjust_ignored` and `mvs_llr_polya_end_to_early_stop`, and resulting columns in the output csv files, were removed.
+
 ## [v0.2.4] - 2024-12-09
 
 ### Changed

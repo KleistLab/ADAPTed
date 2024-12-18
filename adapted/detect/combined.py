@@ -355,7 +355,7 @@ def combined_detect_start_peak(
     return list_of_detect_res
 
 
-def validate_boundaries(signal, boundaries, spc, full_signal_len):
+def validate_boundaries(signal, boundaries, spc, full_signal_len) -> DetectResults:
     spc = deepcopy(
         spc
     )  # copy to avoid changing original config when setting pa_mean_range
@@ -376,9 +376,6 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len):
     mvs_detect_polya_med = None
     mvs_detect_polya_local_range = None
     mvs_detect_med_shift = None
-
-    mvs_llr_polya_end_adjust_ignored = False
-    mvs_llr_polya_end_to_early_stop = False
 
     real_adapter_mean_start = None
     real_adapter_mean_end = None
@@ -546,20 +543,10 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len):
 
                         # now, adapter_end might be > polya_end, especially if the polya was (incorrectly) refined
                         if adapter_end > polya_end:
-                            polya_end = adapter_end
-                            if (
-                                (boundaries.polya_end_adjust is not None)
-                                and (boundaries.polya_end_adjust < 0)
-                                and (
-                                    -boundaries.polya_end_adjust
-                                    > (adapter_end - polya_end)
-                                )
-                            ):
-                                polya_end = polya_end - boundaries.polya_end_adjust
-                                mvs_llr_polya_end_adjust_ignored = True
-                            elif not boundaries.polya_truncated:
-                                polya_end = boundaries.trace_early_stop_pos
-                                mvs_llr_polya_end_to_early_stop = True
+                            success = False
+                            fail_reason = (
+                                "Adapter end > polya end (mvs_detect overwrite)"
+                            )
 
                 if success:
                     polya_end_best = polya_end
@@ -584,7 +571,6 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len):
         adapter_start,
         adapter_end,
         polya_end_best,
-        polya_truncated=boundaries.polya_truncated,
     )
 
     primary_section = {
@@ -603,13 +589,7 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len):
         adapter_end=adapter_end,
         polya_end=polya_end_best,
         polya_candidates=boundaries.polya_end_topk,
-        # polya_truncated=boundaries.polya_truncated,
         **primary_section,
-        llr_adapter_end_adjust=boundaries.adapter_end_adjust,
-        llr_polya_end_adjust=boundaries.polya_end_adjust,
-        llr_trace_early_stop_pos=boundaries.trace_early_stop_pos,  # early stop position in trace, interesting for runtime performance
-        mvs_llr_polya_end_adjust_ignored=mvs_llr_polya_end_adjust_ignored,
-        mvs_llr_polya_end_to_early_stop=mvs_llr_polya_end_to_early_stop,
         mvs_adapter_end=mvs_adapter_end,
         mvs_detect_mean_at_loc=mvs_detect_mean_at_loc,
         mvs_detect_var_at_loc=mvs_detect_var_at_loc,
@@ -622,7 +602,6 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len):
         real_adapter_local_range=real_adapter_local_range,
         open_pores=open_pores,
         fail_reason=fail_reason,
-        llr_detect_log=boundaries.logstr,
         **partitions.adapter.to_dict("adapter"),  # start,len,mean,std,med,mad
         **partitions.polya.to_dict("polya"),  # start,len,mean,std,med,mad
         **partitions.rna.to_dict("rna_preloaded"),  # start,len,mean,std,med,mad

@@ -79,7 +79,6 @@ These files contain the following columns:
 - `polya_std` : the standard deviation of the poly(A) signal, in pico amperes.
 - `polya_med` : the median of the poly(A) signal, in pico amperes.
 - `polya_mad` : the median absolute deviation of the poly(A) signal, in pico amperes.
-- `polya_truncated` : whether the poly(A) signal was truncated by the signal preload logic during detection.
 - `polya_candidates` : candidate positions for poly(A) tail detection.
 - `rna_preloaded_start` : the start coordinate of the RNA signal in the raw signal.
 - `rna_preloaded_len` : the length of the preloaded RNA signal, in number of samples.
@@ -100,11 +99,6 @@ These files contain the following columns:
 - `cnn_polya_end` : CNN-detected poly(A) end coordinate.
 - `start_peak_adapter_end` : adapter end coordinate from peak detection.
 - `start_peak_polya_end` : poly(A) end coordinate from peak detection.
-- `llr_adapter_end_adjust` : adjustments to adapter end coordinate in LLR refinement.
-- `llr_polya_end_adjust` : adjustments to poly(A) end coordinate in LLR refinement.
-- `llr_trace_early_stop_pos` : position where trace calculation stopped early.
-- `mvs_llr_polya_end_adjust_ignored` : whether poly(A) end adjustment was ignored in MVS method.
-- `mvs_llr_polya_end_to_early_stop` : if true, poly(A) end was set to early stop position.
 - `mvs_adapter_end` : adapter end coordinate from mean-variance-shift method.
 - `mvs_detect_mean_at_loc` : local mean at detection position.
 - `mvs_detect_var_at_loc` : local variance at detection position.
@@ -115,24 +109,15 @@ These files contain the following columns:
 - `real_adapter_mean_end` : mean of adapter signal at end window.
 - `real_adapter_local_range` : local range of adapter signal.
 - `open_pores` : detected open pore events.
-- `llr_detect_log` : log messages from LLR detection process.
 
 ## Signal preloading
 
 ADAPTed first preloads the first N samples of the signal into memory, and then detects the adapter signal.
-Sometimes, the adapter signal is longer than the preload size, this will lead to the detection failing.
-Sometimes, the adapter+polyA signal is longer than the preload size, this will lead to the detection succeeding, but the polyA signal will be truncated which is of concern for downstream analysis when the length or statistics of the polyA signal are of interest.
-If this is the case, we advise to run the tool once with default settings, and rerun it for truncated polyA reads with `--max_obs_trace` set to a larger value. You can use the `get_truncated.sh` script to easily obtain the truncated reads.
 
-```
-bash scripts/get_truncated.sh /directory/containing/detected/boundaries/files
-adapted detect [OPTIONS] --read_id_csv /directory/containing/detected/boundaries/files/truncated_read_ids.csv --max_obs_trace VALUE
-```
-
+For very long poly(A) tails, the adapter+poly(A) signal may be longer than the preload size, this will lead to incorrect results and is of concern for downstream analysis where the length or statistics of the poly(A) signal are of interest.
+If you expect long tails, we advise to set a greater `--max_obs_trace` value.
 Depending on your poly(A) length distribution, and whether you polyadenylated your reads, choose a suitable value for `--max_obs_trace`.
 A sensible value could be 1.5 or 2 times the default value, for example.
-
-The same workflow could be applied to failed reads and may increase yield.
 
 In all cases, it is important to note that the statistics on the rna signal (`rna_preloaded_mean`, `rna_preloaded_std`, `rna_preloaded_med`, `rna_preloaded_mad`, `rna_preloaded_len`) are based on the preloaded signal, and may not reflect the actual signal.
 
@@ -140,7 +125,7 @@ In all cases, it is important to note that the statistics on the rna signal (`rn
 
 ADAPTed is capable of determining the length of the adapter and poly(A) tail in number of samples in the raw signal. This information can be combined to estimate the length of the poly(A) tail in number of bases: given the fixed length of the adapter sequence, the determined adapter length in number of samples can be used to estimate the translocation speed of the molecule. The poly(A) length in bases is then estimated by dividing the determined poly(A) length in number of samples by the translocation speed.
 
-You can use the `resegment` workflow in our other tool ([WarpDemuX](https://github.com/KleistLab/WarpDemuX)) to obtain the median and median absolute deviation adapter event length per read.
+If you wish to estimate the translocation speed based on the median event length (dwell time) take a look at our other tool ([WarpDemuX](https://github.com/KleistLab/WarpDemuX)).
 
 ## License
 
