@@ -8,6 +8,7 @@ sig_norm_outlier_thresh = 5.0
 
 [cnn_boundaries]
 cnn_detect = true
+fallback_to_llr = true
 model_name = "rna004_130bps@v0.2.4.pth"
 polya_cand_k = 10
 fallback_to_llr_short_reads = true
@@ -52,6 +53,7 @@ med_shift_range = [5.0, inf]
 
 [rna_start_peak]
 detect_rna_start_peak = false
+fallback_to_llr = true
 downscale_factor = 10
 start_peak_max_idx = 150
 offset1 = 10

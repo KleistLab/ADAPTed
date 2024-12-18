@@ -36,6 +36,7 @@ class CNNBoundariesConfig(BaseConfig):
     model_name: str = "rna004_130bps@v0.2.4.pth"
     polya_cand_k: int = 15
     fallback_to_llr_short_reads: bool = True
+    fallback_to_llr: bool = True
 
     def __post_init__(self):
         if self.cnn_detect:
@@ -105,6 +106,8 @@ class RNAStartPeakConfig(BaseConfig):
     offset1: int = 10
     offset2: int = 100
     open_pore_pa: float = 195.0
+
+    fallback_to_llr: bool = True
 
 
 @dataclass

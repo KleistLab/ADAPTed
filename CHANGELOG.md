@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Unreleased
 
+### Added
+
+- A new `fallback_to_llr` parameter to the `cnn_boundaries` and `rna_start_peak` sections of the config file. When set to true, the primary detection method will fallback to the LLR detection method upon failure.
+
 ### Removed
 
 - Unused detection result attributes `polya_truncated`, `llr_adapter_end_adjust`, `llr_polya_end_adjust`, `llr_trace_early_stop_pos`, `mvs_llr_polya_end_adjust_ignored` and `mvs_llr_polya_end_to_early_stop`, and resulting columns in the output csv files, were removed.

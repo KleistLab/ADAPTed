@@ -274,31 +274,24 @@ def combined_detect_cnn(
                     n_nan = np.isnan(ds).sum()
                     s = ds[: m_down - n_nan]
 
-                    trace = calc_adapter_trace(
-                        signal=s,
-                        offset_head=5,
-                        offset_tail=5,
-                        stride=1,
-                        early_stop1_window=0,
-                        early_stop1_stride=0,
-                        early_stop2_window=0,
-                        early_stop2_stride=0,
-                        return_c_c2=True,
-                        adapter_early_stopping=0,
-                        polya_early_stopping=0,
-                        c=None,
-                        c2=None,
+                if (
+                    not validated.success and spc.cnn_boundaries.fallback_to_llr
+                ):  # still no success, retry with full LLR on downscaled signal
+                    spc_copy = deepcopy(spc)
+                    spc_copy.primary_method = "llr"
+                    s = downscale_single_read_excl_nan(
+                        norm_signal[: min(spc.core.max_obs_trace, full_signal_len)],
+                        spc_copy,
                     )
-                    polya_end = detect_full_polya_trace_peak_with_spike(trace.signal)
-                    if polya_end > 0:
-                        boundaries.polya_end = int(
-                            polya_end * spc.core.downscale_factor
-                            + boundaries.adapter_end
-                        )
-                        boundaries.polya_end_topk = np.array([boundaries.polya_end])
-                        validated = validate_boundaries(
-                            signal[:full_signal_len], boundaries, spc, full_signal_len
-                        )
+                    boundaries = detect_llr_on_downscaled_signal(s, spc_copy)
+                    detect_res = validate_boundaries(
+                        signal[:full_signal_len],
+                        boundaries,
+                        spc_copy,
+                        full_signal_len,
+                    )
+                    if detect_res.success:
+                        validated = detect_res
 
             res.append(validated)
         except Exception as e:
@@ -345,6 +338,22 @@ def combined_detect_start_peak(
                 if false_before and flagged
                 else detect_res.fail_reason
             )
+
+            # retry failed reads using LLR on downscaled signal
+            if detect_res.success is False and spc.cnn_boundaries.fallback_to_llr:
+                spc_copy = deepcopy(spc)
+                spc_copy.primary_method = "llr"
+                s = downscale_single_read_excl_nan(signal[:full_signal_len], spc_copy)
+                new_boundaries = detect_llr_on_downscaled_signal(s, spc_copy)
+                new_detect_res = validate_boundaries(
+                    signal[:full_signal_len],
+                    new_boundaries,
+                    spc_copy,
+                    full_signal_len,
+                )
+                if new_detect_res.success:
+                    detect_res = new_detect_res
+
             list_of_detect_res.append(detect_res)
 
         except Exception as e:
