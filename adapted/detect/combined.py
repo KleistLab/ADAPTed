@@ -8,7 +8,7 @@ Contact: w.vandertoorn@fu-berlin.de
 
 import warnings
 from copy import deepcopy
-from typing import List, Union
+from typing import List, Tuple, Union
 
 import numpy as np
 from adapted.config.sig_proc import SigProcConfig
@@ -36,35 +36,32 @@ from adapted.partition.signal_partitions import calc_partitions_from_vals
 ##############################
 
 
-def combined_detect_llr(
-    calibrated_signal: np.ndarray,
-    full_signal_len: int,
+def detect_llr_on_downscaled_signal(
+    signal: np.ndarray,
     spc: SigProcConfig,
-) -> DetectResults:
+) -> Boundaries:
+    """
+    Detect adapter and poly(A) boundaries using LLR on a downscaled signal.
 
-    norm_signal = normalize_signal(
-        calibrated_signal[: spc.core.max_obs_trace],
-        outlier_thresh=spc.core.sig_norm_outlier_thresh,
-        with_nan=True,
-    )
-    ds = downscale_signal(
-        norm_signal.reshape(1, -1),
-        spc.core.downscale_factor,
-    ).ravel()
-    m_down = ds.size
-    n_nan = np.isnan(ds).sum()
-    s = ds[: m_down - n_nan]
+    Parameters:
+        signal: np.ndarray
+            The signal to detect boundaries on. normalized, downscaled and without nan values.
+        spc: SigProcConfig
+            The signal processing configuration.
 
+    Returns:
+        Boundaries:
+            The detected boundaries.
+    """
     boundaries = Boundaries(
         adapter_start=0,
         adapter_end=0,
         polya_end=0,
         trace=np.array([]),
-        logstr="",
     )
 
     trace = calc_adapter_trace(
-        signal=s,
+        signal=signal,
         offset_head=5 + spc.core.min_obs_adapter // spc.core.downscale_factor,
         offset_tail=5,
         stride=1,
@@ -94,7 +91,7 @@ def combined_detect_llr(
                 adapter_end * spc.core.downscale_factor + spc.core.min_obs_adapter
             )
             trace = calc_adapter_trace(
-                signal=s,
+                signal=signal,
                 offset_head=1,
                 offset_tail=1,
                 stride=1,
@@ -116,6 +113,36 @@ def combined_detect_llr(
                 )
                 boundaries.polya_end_topk = np.array([boundaries.polya_end])
 
+    return boundaries
+
+
+def downscale_single_read_excl_nan(
+    signal: np.ndarray, spc: SigProcConfig
+) -> np.ndarray:
+    ds = downscale_signal(
+        signal.reshape(1, -1),
+        spc.core.downscale_factor,
+    ).ravel()
+    m_down = ds.size
+    n_nan = np.isnan(ds).sum()
+    s = ds[: m_down - n_nan]
+    return s
+
+
+def combined_detect_llr(
+    calibrated_signal: np.ndarray,
+    full_signal_len: int,
+    spc: SigProcConfig,
+) -> DetectResults:
+
+    norm_signal = normalize_signal(
+        calibrated_signal[: min(spc.core.max_obs_trace, full_signal_len)],
+        outlier_thresh=spc.core.sig_norm_outlier_thresh,
+        with_nan=True,
+    )
+    s = downscale_single_read_excl_nan(norm_signal, spc)
+
+    boundaries = detect_llr_on_downscaled_signal(s, spc)
     return validate_boundaries(calibrated_signal, boundaries, spc, full_signal_len)
 
 
@@ -143,72 +170,9 @@ def combined_detect_llr2(
         warnings.filterwarnings("ignore", category=RuntimeWarning)
 
         for s, n in zip(downscaled, n_nan):
-            res_ = Boundaries(
-                adapter_start=0,
-                adapter_end=0,
-                polya_end=0,
-                trace=np.array([]),
-                logstr="",
-            )
-
             s_ = s[: m_down - n]
-            trace = calc_adapter_trace(
-                signal=s_,
-                offset_head=5,
-                offset_tail=5,
-                stride=1,
-                early_stop1_window=0,
-                early_stop1_stride=0,
-                early_stop2_window=0,
-                early_stop2_stride=0,
-                return_c_c2=True,
-                trace_start=0,
-                adapter_early_stopping=0,
-                polya_early_stopping=0,
-                c=None,
-                c2=None,
-            )
-            adapter_end_cands = adapter_end_from_trace(
-                trace,
-                prominence=spc.llr_boundaries.adapter_peak_prominence,
-                rel_height=spc.llr_boundaries.adapter_peak_rel_height,
-                width=spc.llr_boundaries.adapter_peak_width
-                // spc.core.downscale_factor,
-                fix_plateau=True,
-                correct_for_split_peaks=True,
-            )
-            if len(adapter_end_cands) == 0:
-                list_of_boundaries.append(res_)
-                continue
-
-            adapter_end = adapter_end_cands[0]
-            if adapter_end > 0:
-                res_.adapter_end = (
-                    adapter_end * spc.core.downscale_factor + spc.core.min_obs_adapter
-                )
-            trace = calc_adapter_trace(
-                signal=s_,
-                offset_head=1,
-                offset_tail=1,
-                stride=1,
-                early_stop1_window=0,
-                early_stop1_stride=0,
-                early_stop2_window=0,
-                early_stop2_stride=0,
-                return_c_c2=False,
-                trace_start=adapter_end,
-                adapter_early_stopping=0,
-                polya_early_stopping=0,
-                c=trace.c,
-                c2=trace.c2,
-            )
-            polya_end = detect_full_polya_trace_peak_with_spike(trace.signal)
-            if polya_end > 0:
-                res_.polya_end = (
-                    polya_end * spc.core.downscale_factor + spc.core.min_obs_adapter
-                )
-                res_.polya_end_topk = np.array([res_.polya_end])
-            list_of_boundaries.append(res_)
+            boundaries = detect_llr_on_downscaled_signal(s_, spc)
+            list_of_boundaries.append(boundaries)
 
     del downscaled, n_nan
 
@@ -248,39 +212,71 @@ def combined_detect_cnn(
             validated = validate_boundaries(
                 signal[:full_signal_len], boundaries, spc, full_signal_len
             )
-            if (
-                not validated.success
-                and boundaries.adapter_end > 0
-                and boundaries.polya_end > 0
-                and boundaries.polya_end - boundaries.adapter_end > 1000
-                and full_signal_len < 2 * spc.core.max_obs_adapter
-                and spc.cnn_boundaries.fallback_to_llr_short_reads
-            ):
-                with warnings.catch_warnings():
-                    warnings.filterwarnings("ignore", category=RuntimeWarning)
-                    # hail mary
-                    norm_signal = normalize_signal(
-                        signal[: min(spc.core.max_obs_trace, full_signal_len)],
-                        outlier_thresh=spc.core.sig_norm_outlier_thresh,
-                        with_nan=True,
-                    )
-                    ds = downscale_signal(
-                        norm_signal[
-                            int(boundaries.adapter_end) : int(boundaries.polya_end)
-                        ].reshape(1, -1),
-                        spc.core.downscale_factor,
-                    ).ravel()
-                    m_down = ds.size
-                    n_nan = np.isnan(ds).sum()
-                    s = ds[: m_down - n_nan]
-
+            if not validated.success:
+                # TODO: norm downscaled signal for speed?
+                norm_signal = normalize_signal(
+                    signal[: min(spc.core.max_obs_trace, full_signal_len)],
+                    outlier_thresh=spc.core.sig_norm_outlier_thresh,
+                    with_nan=True,
+                )
+                spc_copy = deepcopy(spc)
+                spc_copy.primary_method = "llr"
+                # short reads for which polya boundary was likely overshoot
                 if (
-                    not validated.success and spc.cnn_boundaries.fallback_to_llr
+                    boundaries.adapter_end > 0
+                    and boundaries.polya_end > 0
+                    and boundaries.polya_end - boundaries.adapter_end > 1000
+                    and full_signal_len < 2 * spc_copy.core.max_obs_adapter
+                    and spc_copy.cnn_boundaries.fallback_to_llr_short_reads
+                ):
+
+                    with warnings.catch_warnings():
+                        warnings.filterwarnings("ignore", category=RuntimeWarning)
+                        # hail mary
+                        s = downscale_single_read_excl_nan(
+                            norm_signal[
+                                int(boundaries.adapter_end) : int(boundaries.polya_end)
+                            ],
+                            spc_copy,
+                        )
+
+                        trace = calc_adapter_trace(
+                            signal=s,
+                            offset_head=5,
+                            offset_tail=5,
+                            stride=1,
+                            early_stop1_window=0,
+                            early_stop1_stride=0,
+                            early_stop2_window=0,
+                            early_stop2_stride=0,
+                            return_c_c2=True,
+                            adapter_early_stopping=0,
+                            polya_early_stopping=0,
+                            c=None,
+                            c2=None,
+                        )
+                        polya_end = detect_full_polya_trace_peak_with_spike(
+                            trace.signal
+                        )
+                        if polya_end > 0:
+                            boundaries.polya_end = int(
+                                polya_end * spc_copy.core.downscale_factor
+                                + boundaries.adapter_end
+                            )
+                            boundaries.polya_end_topk = np.array([boundaries.polya_end])
+                            validated = validate_boundaries(
+                                signal[:full_signal_len],
+                                boundaries,
+                                spc_copy,
+                                full_signal_len,
+                            )
+                if (
+                    not validated.success and spc_copy.cnn_boundaries.fallback_to_llr
                 ):  # still no success, retry with full LLR on downscaled signal
-                    spc_copy = deepcopy(spc)
-                    spc_copy.primary_method = "llr"
                     s = downscale_single_read_excl_nan(
-                        norm_signal[: min(spc.core.max_obs_trace, full_signal_len)],
+                        norm_signal[
+                            : min(spc_copy.core.max_obs_trace, full_signal_len)
+                        ],
                         spc_copy,
                     )
                     boundaries = detect_llr_on_downscaled_signal(s, spc_copy)
