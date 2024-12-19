@@ -34,3 +34,15 @@ def range_is_empty(
     return (range[0] == -np.inf and range[1] == np.inf) or (
         range[0] == None and range[1] == None
     )
+
+
+def range_replace_none(
+    the_range: Tuple[Optional[float], Optional[float]],
+) -> Tuple[Optional[float], Optional[float]]:
+    assert len(the_range) == 2
+    lb, ub = the_range
+    if lb is None:
+        lb = -np.inf
+    if ub is None:
+        ub = np.inf
+    return lb, ub

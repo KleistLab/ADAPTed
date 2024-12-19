@@ -28,7 +28,7 @@ from adapted.detect.mvs import (
 from adapted.detect.normalize import normalize_signal
 from adapted.detect.real_range import real_range_check
 from adapted.detect.start_peak import detect_rna_start_peak
-from adapted.detect.utils import in_range, range_is_empty
+from adapted.detect.utils import in_range, range_is_empty, range_replace_none
 from adapted.partition.signal_partitions import calc_partitions_from_vals
 
 ##############################
@@ -370,7 +370,17 @@ def combined_detect_start_peak(
     return list_of_detect_res
 
 
-def validate_boundaries(signal, boundaries, spc, full_signal_len) -> DetectResults:
+def validate_boundaries(
+    signal: np.ndarray,
+    boundaries: Boundaries,
+    spc: SigProcConfig,
+    full_signal_len: int,
+) -> DetectResults:
+
+    # check that signal does not contain nan values
+    if np.isnan(signal).any():
+        raise ValueError("Validate boundaries failed: Signal contains nan values")
+
     spc = deepcopy(
         spc
     )  # copy to avoid changing original config when setting pa_mean_range
@@ -461,7 +471,11 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len) -> DetectResul
             ):
                 # if pA mean range is not set, use adapter med scale range
                 mvs_pA_mean_range = (
-                    np.array(spc.mvs_polya.pA_mean_adapter_med_scale_range)
+                    np.array(
+                        range_replace_none(
+                            spc.mvs_polya.pA_mean_adapter_med_scale_range
+                        )
+                    )
                     * adapter_med
                 )
                 spc.mvs_polya.pA_mean_range = (
@@ -473,6 +487,7 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len) -> DetectResul
             elif range_is_empty(spc.mvs_polya.pA_mean_range):
                 raise ValueError("pA_mean_range is not specified")
 
+            assert boundaries.polya_end_topk is not None
             for polya_end in boundaries.polya_end_topk:
                 if polya_end == 0 or polya_end is None:
                     break
@@ -568,14 +583,19 @@ def validate_boundaries(signal, boundaries, spc, full_signal_len) -> DetectResul
                     break
 
     if success and spc.med_shift.detect_med_shift:
-        adapter_rna_median_shift = np.median(
-            signal[
-                adapter_end : min(
-                    adapter_end + spc.med_shift.med_shift_window, full_signal_len
-                )
-            ]
-        ) - np.median(
-            signal[max(adapter_end - spc.med_shift.med_shift_window, 0) : adapter_end]
+        adapter_rna_median_shift = float(
+            np.median(
+                signal[
+                    adapter_end : min(
+                        adapter_end + spc.med_shift.med_shift_window, full_signal_len
+                    )
+                ]
+            )
+            - np.median(
+                signal[
+                    max(adapter_end - spc.med_shift.med_shift_window, 0) : adapter_end
+                ]
+            )
         )
         if not in_range(adapter_rna_median_shift, *spc.med_shift.med_shift_range):
             success = False
