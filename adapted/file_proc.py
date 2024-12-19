@@ -486,7 +486,7 @@ def worker_progress_report(ridx_dict, ridx_lock):
     time_passed = 0
 
     while not _STOP_SIGNAL.is_set():
-        if time_passed >= 10:  # update every 10 seconds
+        if time_passed >= 1:  # update every 1 seconds
             if not total_reads_set:
                 total_reads = get_global_var("total_reads")
                 total_reads_set = total_reads != -1
