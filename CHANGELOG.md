@@ -8,9 +8,26 @@ All notable changes to this project will be documented in this file.
 
 - A new `fallback_to_llr` parameter to the `cnn_boundaries` and `rna_start_peak` sections of the config file. When set to true, the primary detection method will fallback to the LLR detection method upon failure.
 
+### Changed
+
+- Made `--input` and `--num_proc` arguments required
+- Removed default value for `mean_start_range` and `mean_end_range` in real range check
+- Updated `local_range` to [7.0, 35.0] (was [10.0, 30.0])
+- Improved progress bar update frequency (1s instead of 10s)
+- Added timestamp to output directory names
+- Simplified continuation mode by removing command backup
+- Improved error handling and signal validation
+
+### Fixed
+
+- Fixed a bug where the reads specified in `read_ids_excl` were not excluded from the detection workflow. Important for continuing from a previous run.
+
 ### Removed
 
-- Unused detection result attributes `polya_truncated`, `llr_adapter_end_adjust`, `llr_polya_end_adjust`, `llr_trace_early_stop_pos`, `mvs_llr_polya_end_adjust_ignored` and `mvs_llr_polya_end_to_early_stop`, and resulting columns in the output csv files, were removed.
+- Unused detection result attributes `polya_truncated`, `llr_adapter_end_adjust`, `llr_polya_end_adjust`, `llr_trace_early_stop_pos`, `mvs_llr_polya_end_adjust_ignored` and `mvs_llr_polya_end_to_early_stop`, and resulting columns in the output csv files
+- Removed `read_id_csv_colname` argument (now always uses "read_id")
+- Removed `get_truncated.sh` script and related documentation
+- Removed `llr_detect_log` from output
 
 ## [v0.2.4] - 2024-12-09
 
