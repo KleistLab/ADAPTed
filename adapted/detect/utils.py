@@ -27,12 +27,12 @@ def in_range(
 
 
 def range_is_empty(
-    range: Union[Tuple[Optional[float], Optional[float]], None],
+    the_range: Union[Tuple[Optional[float], Optional[float]], None],
 ) -> bool:
-    if range is None:
+    if the_range is None:
         return True
-    return (range[0] == -np.inf and range[1] == np.inf) or (
-        range[0] == None and range[1] == None
+    return (the_range[0] == -np.inf and the_range[1] == np.inf) or (
+        the_range[0] == None and the_range[1] == None
     )
 
 
