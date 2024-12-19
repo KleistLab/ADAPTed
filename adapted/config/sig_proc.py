@@ -123,10 +123,10 @@ class RealRangeConfig(BaseConfig):
     real_signal_check: bool = True
 
     mean_window: int = 300
-    mean_start_range: Tuple[Optional[float], Optional[float]] = (50.0, 100.0)
-    mean_end_range: Tuple[Optional[float], Optional[float]] = (75.0, 120.0)
+    mean_start_range: Tuple[Optional[float], Optional[float]] = (None, None)
+    mean_end_range: Tuple[Optional[float], Optional[float]] = (None, None)
     max_obs_local_range: int = 5000
-    local_range: Tuple[Optional[float], Optional[float]] = (10.0, 30.0)
+    local_range: Tuple[Optional[float], Optional[float]] = (7.0, 35.0)
     adapter_mad_range: Tuple[Optional[float], Optional[float]] = (3.0, 12.0)
 
 
