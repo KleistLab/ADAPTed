@@ -77,11 +77,8 @@ performance_group.add_argument(
     "-j",
     "--num_proc",
     type=int,
-    default=None,
-    help=(
-        "Number of num_proc to use for parallel processing. If not specified, all"
-        " available cores will be used."
-    ),
+    required=True,
+    help=("Number of cores to use for parallel processing."),
 )
 
 performance_group.add_argument(
@@ -89,7 +86,9 @@ performance_group.add_argument(
     "--batch_size",
     type=int,
     default=4000,
-    help=("Number of reads per output file."),
+    help=(
+        "Number of reads per output file. Increase this value to reduce the number of output files."
+    ),
 )
 
 performance_group.add_argument(
@@ -110,6 +109,7 @@ processing_group.add_argument(
     "--input",
     type=str,
     nargs="+",
+    required=True,
     help=(
         "Path(s) to pod5 file(s). If directory/directories, all .pod5 files in the"
         " paths are processed (non-recursive). "
@@ -159,15 +159,6 @@ processing_group.add_argument(
         " 'read_id' column."
     ),
 )
-processing_group.add_argument(
-    "--read_id_csv_colname",
-    type=str,
-    default="read_id",
-    help=(
-        "Column name in 'read_id_csv' containing the read IDs to be processed. Defaults"
-        " to 'read_id'. This argument is ignored if '--preprocessed' is set."
-    ),
-)
 
 parser_detect._action_groups.reverse()  #'positional arguments', 'optional arguments', 'Performance', 'Processing'; reverse to get Processing first
 
@@ -213,9 +204,11 @@ def parse_args() -> Config:
 
     read_ids = []
     if args.read_id_csv:
-        read_ids = pd.read_csv(
-            args.read_id_csv,
-        )[args.read_id_csv_colname].values
+        read_ids = list(
+            pd.read_csv(
+                args.read_id_csv,
+            )["read_id"].values
+        )
 
     files = input_to_filelist(args.input)
 
