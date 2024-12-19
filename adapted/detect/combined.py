@@ -8,7 +8,7 @@ Contact: w.vandertoorn@fu-berlin.de
 
 import warnings
 from copy import deepcopy
-from typing import List, Tuple, Union
+from typing import List, Union
 
 import numpy as np
 from adapted.config.sig_proc import SigProcConfig
@@ -37,15 +37,15 @@ from adapted.partition.signal_partitions import calc_partitions_from_vals
 
 
 def detect_llr_on_downscaled_signal(
-    signal: np.ndarray,
+    ds_signal: np.ndarray,
     spc: SigProcConfig,
 ) -> Boundaries:
     """
     Detect adapter and poly(A) boundaries using LLR on a downscaled signal.
 
     Parameters:
-        signal: np.ndarray
-            The signal to detect boundaries on. normalized, downscaled and without nan values.
+        ds_signal: np.ndarray
+            The downscaled signal to detect boundaries on. normalized, downscaled and without nan values.
         spc: SigProcConfig
             The signal processing configuration.
 
@@ -61,9 +61,9 @@ def detect_llr_on_downscaled_signal(
     )
 
     trace = calc_adapter_trace(
-        signal=signal,
-        offset_head=5 + spc.core.min_obs_adapter // spc.core.downscale_factor,
-        offset_tail=5,
+        signal=ds_signal,
+        offset_head=1 + spc.core.min_obs_adapter // spc.core.downscale_factor,
+        offset_tail=1,
         stride=1,
         early_stop1_window=0,
         early_stop1_stride=0,
@@ -76,44 +76,43 @@ def detect_llr_on_downscaled_signal(
         c=None,
         c2=None,
     )
-    adapter_end_cands = adapter_end_from_trace(
-        trace,
-        prominence=spc.llr_boundaries.adapter_peak_prominence,
-        rel_height=spc.llr_boundaries.adapter_peak_rel_height,
-        width=spc.llr_boundaries.adapter_peak_width // spc.core.downscale_factor,
-        fix_plateau=True,
-        correct_for_split_peaks=True,
-    )
-    if len(adapter_end_cands) > 0:
-        adapter_end = adapter_end_cands[0]
-        if adapter_end > 0:
-            boundaries.adapter_end = (
-                adapter_end * spc.core.downscale_factor + spc.core.min_obs_adapter
-            )
-            trace = calc_adapter_trace(
-                signal=signal,
-                offset_head=1,
-                offset_tail=1,
-                stride=1,
-                early_stop1_window=0,
-                early_stop1_stride=0,
-                early_stop2_window=0,
-                early_stop2_stride=0,
-                return_c_c2=False,
-                trace_start=adapter_end,
-                adapter_early_stopping=0,
-                polya_early_stopping=0,
-                c=trace.c,
-                c2=trace.c2,
-            )
-            polya_end = detect_full_polya_trace_peak_with_spike(trace.signal)
-            if polya_end > 0:
-                boundaries.polya_end = (
-                    polya_end * spc.core.downscale_factor + spc.core.min_obs_adapter
-                )
-                boundaries.polya_end_topk = np.array([boundaries.polya_end])
+    with warnings.catch_warnings():  # TODO: figure out source of warnings
+        warnings.filterwarnings("ignore", category=RuntimeWarning)
 
-    return boundaries
+        adapter_end_cands = adapter_end_from_trace(
+            trace,
+            prominence=spc.llr_boundaries.adapter_peak_prominence,
+            rel_height=spc.llr_boundaries.adapter_peak_rel_height,
+            width=spc.llr_boundaries.adapter_peak_width // spc.core.downscale_factor,
+            fix_plateau=True,
+            correct_for_split_peaks=True,
+        )
+        if len(adapter_end_cands) > 0:
+            adapter_end = adapter_end_cands[0]
+            if adapter_end > 0:
+                boundaries.adapter_end = adapter_end * spc.core.downscale_factor
+                trace = calc_adapter_trace(
+                    signal=ds_signal,
+                    offset_head=1,
+                    offset_tail=1,
+                    stride=1,
+                    early_stop1_window=0,
+                    early_stop1_stride=0,
+                    early_stop2_window=0,
+                    early_stop2_stride=0,
+                    return_c_c2=False,
+                    trace_start=adapter_end,
+                    adapter_early_stopping=0,
+                    polya_early_stopping=0,
+                    c=trace.c,
+                    c2=trace.c2,
+                )
+                polya_end = detect_full_polya_trace_peak_with_spike(trace.signal)
+                if polya_end > 0:
+                    boundaries.polya_end = polya_end * spc.core.downscale_factor
+                    boundaries.polya_end_topk = np.array([boundaries.polya_end])
+
+        return boundaries
 
 
 def downscale_single_read_excl_nan(
@@ -143,7 +142,12 @@ def combined_detect_llr(
     s = downscale_single_read_excl_nan(norm_signal, spc)
 
     boundaries = detect_llr_on_downscaled_signal(s, spc)
-    return validate_boundaries(calibrated_signal, boundaries, spc, full_signal_len)
+    return validate_boundaries(
+        calibrated_signal[:full_signal_len],
+        boundaries,
+        spc,
+        full_signal_len,
+    )
 
 
 def combined_detect_llr2(
@@ -158,7 +162,7 @@ def combined_detect_llr2(
         with_nan=True,
     )  # batch normalized
     downscaled = downscale_signal(
-        norm_signal[:, spc.core.min_obs_adapter :],
+        norm_signal,
         spc.core.downscale_factor,
     )
 
@@ -166,13 +170,10 @@ def combined_detect_llr2(
     m_down = downscaled.shape[1]
     n_nan = np.isnan(downscaled).sum(axis=1)
 
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=RuntimeWarning)
-
-        for s, n in zip(downscaled, n_nan):
-            s_ = s[: m_down - n]
-            boundaries = detect_llr_on_downscaled_signal(s_, spc)
-            list_of_boundaries.append(boundaries)
+    for s, n in zip(downscaled, n_nan):
+        s_ = s[: m_down - n]
+        boundaries = detect_llr_on_downscaled_signal(s_, spc)
+        list_of_boundaries.append(boundaries)
 
     del downscaled, n_nan
 
@@ -183,7 +184,10 @@ def combined_detect_llr2(
         try:
             list_of_detect_res.append(
                 validate_boundaries(
-                    signal[:full_signal_len], boundaries, spc, full_signal_len
+                    signal[:full_signal_len],
+                    boundaries,
+                    spc,
+                    full_signal_len,
                 )
             )
         except Exception as e:
@@ -210,7 +214,10 @@ def combined_detect_cnn(
         try:
 
             validated = validate_boundaries(
-                signal[:full_signal_len], boundaries, spc, full_signal_len
+                signal[:full_signal_len],
+                boundaries,
+                spc,
+                full_signal_len,
             )
             if not validated.success:
                 # TODO: norm downscaled signal for speed?
@@ -317,7 +324,10 @@ def combined_detect_start_peak(
         )
         try:
             detect_res = validate_boundaries(
-                signal[:full_signal_len], boundaries, spc, full_signal_len
+                signal[:full_signal_len],
+                boundaries,
+                spc,
+                full_signal_len,
             )
             detect_res.start_peak_idx = res.start_peak_idx
             detect_res.start_peak_pa = res.start_peak_pa
