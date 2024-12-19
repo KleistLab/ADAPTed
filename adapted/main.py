@@ -16,7 +16,7 @@ from adapted.logger import setup_logger
 from adapted.parser import parse_args
 
 
-def main(args=None):
+def main(args=None) -> dict:
 
     config = parse_args()
     setup_logger(os.path.join(config.output.output_dir, "adapted.log"))
@@ -70,7 +70,7 @@ def main(args=None):
     # save spc that were used
     config.sig_proc.to_toml(os.path.join(config.output.output_dir, "config.toml"))
 
-    run_detect(
+    ridx_dict = run_detect(
         files=files,
         read_ids_incl=read_ids_incl,
         read_ids_excl=read_ids_excl,
@@ -78,6 +78,8 @@ def main(args=None):
     )
 
     logging.info("Done.")
+
+    return ridx_dict
 
 
 if __name__ == "__main__":

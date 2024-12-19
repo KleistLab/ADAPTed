@@ -611,7 +611,7 @@ def set_total_num_reads(
 
 def run_detect(
     files: Set[str], read_ids_incl: Set[str], read_ids_excl: Set[str], config: Config
-) -> None:
+) -> Dict[str, int]:
     """enqueue_minibatches_thread takes care of preloading the signals in the queue.
     Maxsize of queue is set to num_proc. Detect is the most time consuming step, we want to limit the signal preloading to be in sync with the speed of detect.
     """
@@ -821,3 +821,5 @@ def run_detect(
             )
         else:
             logging.info(f"No detections were made.")
+
+        return dict(ridx_dict)
