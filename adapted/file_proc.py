@@ -164,7 +164,7 @@ def yield_signals_from_pod5(
     for filename in pod5_files:
         with Reader(filename) as file_obj:
             for read_record in file_obj.reads(selection=selection, missing_ok=True):
-                if read_record.read_id in read_ids_excl:
+                if str(read_record.read_id) in read_ids_excl:
                     continue
 
                 _m = min(m, read_record.num_samples)
