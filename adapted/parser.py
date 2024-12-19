@@ -10,7 +10,6 @@ import argparse
 import datetime
 import json
 import os
-import shutil
 import uuid
 from argparse import RawTextHelpFormatter
 
@@ -167,6 +166,8 @@ parser_detect._action_groups.reverse()  #'positional arguments', 'optional argum
 def parse_args() -> Config:
     args = parser.parse_args()
 
+    mode_continue = False
+    continue_from_dir = ""
     if args.mode == "continue":
         try:
             # load the parser arguments from the command.json file
@@ -178,20 +179,13 @@ def parse_args() -> Config:
                 "Please provide a valid continue-from directory."
             )
 
-        # create a backup of the command.json file
-        shutil.copy(
-            os.path.join(args.continue_from, "command.json"),
-            os.path.join(args.continue_from, "command_previous.json"),
-        )
-
-        # update args with the keys in command_dict that are not in args
-        for key, value in command_dict.items():
-            if key not in args.__dict__:
-                args.__dict__[key] = value
+        continue_from_dir = args.continue_from
+        args.__dict__ = command_dict  # this also overwrites the args.mode attribute
 
         # update the args with the command_dict
-        run_dir = args.continue_from
-    else:
+        run_dir = continue_from_dir
+        mode_continue = True
+    else:  # args.mode == detect
         args.output = args.output or os.getcwd()
 
         # create run dir
@@ -226,7 +220,7 @@ def parse_args() -> Config:
     input_config = InputConfig(
         files=files,
         read_ids=read_ids,
-        continue_from=args.continue_from if "continue_from" in args else "",
+        continue_from=continue_from_dir,
     )
 
     batch_config = BatchConfig(
@@ -252,13 +246,14 @@ def parse_args() -> Config:
     spc.update_primary_method()
     spc.update_sig_preload_size()
 
-    # Create run_dir if it doesn't exist
-    os.makedirs(run_dir, exist_ok=True)
-    # Create command.json file
-    command_dict = vars(args)
-    command_json_path = os.path.join(run_dir, "command.json")
-    with open(command_json_path, "w") as f:
-        json.dump(command_dict, f, indent=2)
+    if not mode_continue:
+        # Create run_dir after successful parsing of the arguments
+        os.makedirs(run_dir, exist_ok=True)
+        # Store the command.json file for future reference and continuation
+        command_json_path = os.path.join(run_dir, "command.json")
+        command_dict = vars(args)
+        with open(command_json_path, "w") as f:
+            json.dump(command_dict, f, indent=2)
 
     return Config(
         input=input_config,
