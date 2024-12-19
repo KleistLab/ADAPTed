@@ -7,6 +7,7 @@ Contact: w.vandertoorn@fu-berlin.de
 """
 
 import argparse
+import datetime
 import json
 import os
 import shutil
@@ -195,7 +196,12 @@ def parse_args() -> Config:
 
         # create run dir
         run_dir_name = (
-            "adapted_" + __version__.replace(".", "_") + "_" + str(uuid.uuid4())[:8]
+            "adapted_"
+            + __version__.replace(".", "_")
+            + "_"
+            + datetime.datetime.now().strftime("%Y%m%d_%H%M")
+            + "_"
+            + str(uuid.uuid4())[:8]
         )
         run_dir = os.path.join(args.output, run_dir_name)
 
