@@ -22,14 +22,13 @@ from typing import Callable, Dict, Generator, List, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
-from pod5.reader import Reader
-from tqdm import tqdm
-
 from adapted.config.config import Config
 from adapted.container_types import ReadResult
 from adapted.detect.cnn import load_cnn_model
 from adapted.detect.combined import combined_detect_cnn, combined_detect_llr2
 from adapted.output import save_detected_boundaries
+from pod5.reader import Reader
+from tqdm import tqdm
 
 _STOP_SIGNAL = threading.Event()
 

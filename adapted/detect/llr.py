@@ -15,7 +15,7 @@ import pyximport
 
 pyximport.install(setup_args={"include_dirs": np.get_include()})
 
-from adapted.detect._c_llr import _gains, c_llr_trace, c_llr_trace_gains
+from adapted.detect._c_llr import _gains, c_llr_trace, c_llr_trace_gains  # type: ignore
 from attrs import define, field
 from scipy.signal import find_peaks
 from scipy.stats import linregress

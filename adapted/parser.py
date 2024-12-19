@@ -14,7 +14,6 @@ import uuid
 from argparse import RawTextHelpFormatter
 
 import pandas as pd
-
 from adapted._version import __version__
 from adapted.config.base import load_nested_config_from_file
 from adapted.config.config import Config
