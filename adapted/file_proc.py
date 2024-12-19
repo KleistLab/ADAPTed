@@ -104,13 +104,13 @@ def determine_max_bidx_from_dir(dir_path: str) -> int:
 
 
 def scan_processed_reads(
-    continue_from_path: str, failed_only: bool = False
+    config: Config, failed_only: bool = False
 ) -> Tuple[Set[str], int, int]:
     processed_reads = set()
     max_pass_bidx = -1
     max_fail_bidx = -1
 
-    fail_sub = os.path.join(continue_from_path, "failed_reads")
+    fail_sub = os.path.join(config.output.output_dir_fail)
     for file in os.listdir(fail_sub):
         if file.startswith("failed_reads_") and file.endswith(".csv"):
             bidx = int(file.split("_")[-1].split(".")[0])
@@ -119,7 +119,7 @@ def scan_processed_reads(
                 processed_reads.update(line.split(",")[0] for line in f.readlines()[1:])
 
     if not failed_only:
-        pass_sub = os.path.join(continue_from_path, "boundaries")
+        pass_sub = os.path.join(config.output.output_dir_boundaries)
         for file in os.listdir(pass_sub):
             if file.startswith("detected_boundaries_") and file.endswith(".csv"):
                 bidx = int(file.split("_")[-1].split(".")[0])
@@ -133,7 +133,7 @@ def scan_processed_reads(
 
 def handle_previous_results(config: Config, failed_only: bool = False) -> Set[str]:
     processed_reads, max_pass_bidx, max_fail_bidx = scan_processed_reads(
-        config.input.continue_from, failed_only
+        config, failed_only
     )
     config.batch.bidx_pass = max_pass_bidx + 1
     config.batch.bidx_fail = max_fail_bidx + 1
