@@ -469,7 +469,7 @@ def worker_progress_report(ridx_dict, ridx_lock):
         total=total_reads if total_reads_set else None,
     )
     pbar_fail = tqdm(
-        desc="Failed reads  ",
+        desc="Failed reads",
         position=1,
         total=total_reads if total_reads_set else None,
         bar_format="{desc}",  # Custom format without speed
@@ -515,7 +515,7 @@ def worker_progress_report(ridx_dict, ridx_lock):
                     fail_pct = (n_fail / n_total) * 100
                     pass_pct = (n_pass / n_total) * 100
                     pbar_fail.set_description_str(
-                        f"Failed reads      {n_fail:,} | {fail_pct:.1f}%"
+                        f"Failed reads   {n_fail:,} | {fail_pct:.1f}%"
                     )
                     pbar_pass.set_description_str(
                         f"Passed reads   {n_pass:,} | {pass_pct:.1f}%"
@@ -543,7 +543,7 @@ def worker_progress_report(ridx_dict, ridx_lock):
             fail_pct = (n_fail / n_total) * 100
             pass_pct = (n_pass / n_total) * 100
             pbar_fail.set_description_str(
-                f"Failed reads      {n_fail:,} | {fail_pct:.1f}%"
+                f"Failed reads   {n_fail:,} | {fail_pct:.1f}%"
             )
             pbar_pass.set_description_str(
                 f"Passed reads   {n_pass:,} | {pass_pct:.1f}%"
