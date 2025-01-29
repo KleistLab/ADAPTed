@@ -56,7 +56,7 @@ def validate_filename(
 def get_valid_files(
     basedir: str, endswiths: List[str] = [], basenameprefix: str = ""
 ) -> List[str]:
-    if not len(endswiths) and basenameprefix is None:
+    if not len(endswiths) > 0 and not basenameprefix:
         msg = "Either `endswiths` or `basenameprefix` should be specified."
         logging.error(msg)
         raise ValueError(msg)
@@ -106,7 +106,7 @@ def lexsort_num_suffix(filenames: List[str]) -> List[str]:
 
 def input_to_filelist(
     input: List[str],
-    endswiths: List[str] = [".pod5"],
+    endswiths: List[str] = [],
     basenameprefix: str = "",
 ) -> List[str]:
 
