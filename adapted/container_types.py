@@ -49,7 +49,6 @@ class DetectResults:
     start_peak_next_max_idx: Optional[int] = None
     start_peak_next_max_pa: Optional[float] = None
     start_peak_open_pore_idx: Optional[int] = None
-    start_peak_open_pore_type: Optional[str] = None
 
     adapter_rna_median_shift: Optional[float] = None
 

@@ -310,46 +310,79 @@ def combined_detect_start_peak(
     full_signal_lens: np.ndarray,
     spc: SigProcConfig,
 ) -> List[DetectResults]:
+    """Detects RNA boundaries using the start peak method with optional fallback to LLR detection.
 
+    This function processes a batch of signals to identify adapter and polyA boundaries using
+    the start peak detection method. For reads where this fails, it can optionally fall back
+    to using the LLR (Log Likelihood Ratio) method on a downscaled signal.
+
+    Args:
+        batch_of_signals: 2D array of raw signals [n_signals, signal_length]
+        full_signal_lens: Array containing the actual length of each signal
+        spc: Signal processing configuration object
+
+    Returns:
+        List[DetectResults]: List of detection results for each signal, containing:
+            - Adapter start/end positions
+            - PolyA end position
+            - Start peak statistics
+            - Success/failure status and reasons
+            - Signal partition statistics
+    """
+    # Detect RNA boundaries using start peak method
     df_res = detect_rna_start_peak(batch_of_signals, full_signal_lens, spc)
 
     list_of_detect_res = []
     read_i = 0
     for signal, full_signal_len in zip(batch_of_signals, full_signal_lens):
         res = df_res.iloc[read_i]
+
+        # Create initial boundaries from start peak detection
         boundaries = Boundaries(
             adapter_start=0,
-            adapter_end=res.next_greater_idx,
-            polya_end=res.next_greater_idx,
+            adapter_end=res.next_greater_idx,  # Adapter end is where signal exceeds start peak
+            polya_end=res.polya_end_idx,
+            polya_end_topk=np.array([res.polya_end_idx]),
         )
+
         try:
+            # Validate detected boundaries against configuration parameters
             detect_res = validate_boundaries(
                 signal[:full_signal_len],
                 boundaries,
                 spc,
                 full_signal_len,
             )
+
+            # Store start peak specific results
             detect_res.start_peak_idx = res.start_peak_idx
             detect_res.start_peak_pa = res.start_peak_pa
             detect_res.start_peak_next_max_idx = res.next_greater_idx
             detect_res.start_peak_next_max_pa = res.next_greater_pa
             detect_res.start_peak_open_pore_idx = res.open_pore_idx
-            detect_res.start_peak_open_pore_type = res.flagged_type
 
-            flagged = res.flagged_type is not None
-            false_before = not detect_res.success
-            detect_res.success = detect_res.success and not flagged
+            # Combine success status from both detection and validation
+            initial_success = res.success
+            validate_failed = not detect_res.success
+            detect_res.success = detect_res.success and initial_success
+
+            # Combine failure reasons if both detection and validation failed
             detect_res.fail_reason = (
-                detect_res.fail_reason + ("+" + res.flagged_type)
-                if false_before and flagged
-                else detect_res.fail_reason
+                str(detect_res.fail_reason) + " + " + res.fail_reason
+                if validate_failed and not initial_success
+                else detect_res.fail_reason if validate_failed else res.fail_reason
             )
 
-            # retry failed reads using LLR on downscaled signal
+            # Fallback to LLR method if start peak detection failed
             if detect_res.success is False and spc.rna_start_peak.fallback_to_llr:
+                # Create copy of config to avoid modifying original
                 spc_copy = deepcopy(spc)
                 spc_copy.primary_method = "llr"
+
+                # Downscale signal for LLR processing
                 s = downscale_single_read_excl_nan(signal[:full_signal_len], spc_copy)
+
+                # Attempt LLR detection on downscaled signal
                 new_boundaries = detect_llr_on_downscaled_signal(s, spc_copy)
                 new_detect_res = validate_boundaries(
                     signal[:full_signal_len],
@@ -357,12 +390,15 @@ def combined_detect_start_peak(
                     spc_copy,
                     full_signal_len,
                 )
+
+                # Use LLR results if successful
                 if new_detect_res.success:
                     detect_res = new_detect_res
 
             list_of_detect_res.append(detect_res)
 
         except Exception as e:
+            # Handle any unexpected errors during processing
             list_of_detect_res.append(DetectResults(success=False, fail_reason=str(e)))
 
         read_i += 1
@@ -487,7 +523,9 @@ def validate_boundaries(
             elif range_is_empty(spc.mvs_polya.pA_mean_range):
                 raise ValueError("pA_mean_range is not specified")
 
-            assert boundaries.polya_end_topk is not None
+            if boundaries.polya_end_topk is None:
+                raise ValueError("polya_end_topk is not specified")
+
             for polya_end in boundaries.polya_end_topk:
                 if polya_end == 0 or polya_end is None:
                     break

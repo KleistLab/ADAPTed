@@ -102,12 +102,25 @@ class MVSPolyAConfig(BaseConfig):
 class RNAStartPeakConfig(BaseConfig):
     detect_rna_start_peak: bool = False
     downscale_factor: int = 10
-    start_peak_max_idx: int = 150
-    offset1: int = 10
-    offset2: int = 100
+    start_peak_max_idx: int = 150  # downscaled
+    offset1: int = 10  # downscaled
+    offset2: int = 100  # downscaled
     open_pore_pa: float = 195.0
+    min_start_peak_pa: float = 83.0
 
-    fallback_to_llr: bool = True
+    # ### initial polya based validation ###
+    adapter_med_polya_mean_scale: float = 1.3  # set to -1 to turn off
+    min_len_polya: int = 10  # downscaled
+    # ##############################
+
+    # ### finetuned polya detection ###
+    detect_polya: bool = False
+    detect_polya_min_len: int = 10  # downscaled
+    detect_polya_max_len: int = 80  # downscaled
+    detect_polya_std_scale: float = 2.5
+    # ##############################
+
+    fallback_to_llr: bool = False
 
 
 @dataclass

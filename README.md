@@ -91,7 +91,6 @@ These files contain the following columns:
 - `start_peak_next_max_idx` : index of the next maximum peak.
 - `start_peak_next_max_pa` : pico ampere value at the next maximum peak.
 - `start_peak_open_pore_idx` : index of open pore detection from initial peak analysis.
-- `start_peak_open_pore_type` : type of open pore event detected.
 - `adapter_rna_median_shift` : median shift between adapter and RNA signals.
 - `llr_adapter_end` : log likelihood ratio-detected adapter end coordinate.
 - `llr_polya_end` : log likelihood ratio-detected poly(A) end coordinate.
