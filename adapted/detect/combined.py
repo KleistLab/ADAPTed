@@ -346,7 +346,7 @@ def combined_detect_start_peak(
             )
 
             # retry failed reads using LLR on downscaled signal
-            if detect_res.success is False and spc.cnn_boundaries.fallback_to_llr:
+            if detect_res.success is False and spc.rna_start_peak.fallback_to_llr:
                 spc_copy = deepcopy(spc)
                 spc_copy.primary_method = "llr"
                 s = downscale_single_read_excl_nan(signal[:full_signal_len], spc_copy)
