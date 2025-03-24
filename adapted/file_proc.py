@@ -22,13 +22,18 @@ from typing import Callable, Dict, Generator, List, Set, Tuple, Union
 
 import numpy as np
 import pandas as pd
+from pod5.reader import Reader
+from tqdm import tqdm
+
 from adapted.config.config import Config
 from adapted.container_types import ReadResult
 from adapted.detect.cnn import load_cnn_model
-from adapted.detect.combined import combined_detect_cnn, combined_detect_llr2
+from adapted.detect.combined import (
+    combined_detect_cnn,
+    combined_detect_llr2,
+    combined_detect_start_peak,
+)
 from adapted.output import save_detected_boundaries
-from pod5.reader import Reader
-from tqdm import tqdm
 
 _STOP_SIGNAL = threading.Event()
 
@@ -232,11 +237,17 @@ def worker_detect_on_preloaded_signals(
             full_signal_lens=full_lengths,
             spc=config.sig_proc,
         )
-    else:
+    elif config.sig_proc.primary_method == "cnn":
         detect_results = combined_detect_cnn(
             batch_of_signals=signals,
             full_signal_lens=full_lengths,
             model=model_detect,
+            spc=config.sig_proc,
+        )
+    elif config.sig_proc.primary_method == "start_peak":
+        detect_results = combined_detect_start_peak(
+            batch_of_signals=signals,
+            full_signal_lens=full_lengths,
             spc=config.sig_proc,
         )
     del model_detect
