@@ -14,6 +14,7 @@ import uuid
 from argparse import RawTextHelpFormatter
 
 import pandas as pd
+
 from adapted._version import __version__
 from adapted.config.base import load_nested_config_from_file
 from adapted.config.config import Config
@@ -209,7 +210,7 @@ def parse_args() -> Config:
             )["read_id"].values
         )
 
-    files = input_to_filelist(args.input)
+    files = input_to_filelist(args.input, endswiths=[".pod5"])
 
     if len(files) == 0:
         print("No valid input files found.")
