@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+
 from adapted.config.sig_proc import SigProcConfig
 from adapted.detect.downscale import downscale_signal
 
@@ -8,21 +9,31 @@ def detect_polya(
     signal_downsampled: np.ndarray,
     adapter_end_idx: int,
     min_len: int = 10,
-    max_len: int = 80,
-    std_scale: float = 3,
+    zscore: float = 3,
+    max_gap: int = 5,
+    min_stretch_post_gap: int = 5,
+    min_std: float = 1.0,
+    max_std: float = 3.0,
+    update_std: bool = True,
 ) -> int:
     """Detects the end of a polyA tail sequence in a downsampled signal.
 
     This function identifies where the polyA tail ends by looking for a continuous segment
     of signal that stays within a standard deviation threshold of the mean polyA signal.
-    This is used for adapter end validation rather than precise polyA length estimation.
+    Gaps between polyA segments are allowed, but the length of the gap is limited by
+    max_gap and at least min_stretch_post_gap polyA matches must follow the gap.
 
     Args:
         signal_downsampled: Downsampled signal array without NaN values
         adapter_end_idx: Index where the adapter sequence ends
         min_len: Minimum length of polyA sequence to consider
-        max_len: Maximum length of polyA sequence to look for
-        std_scale: Number of standard deviations to use for threshold
+        zscore: Number of standard deviations to use for threshold
+        max_gap: Maximum gap allowed between polyA segments
+        min_stretch_post_gap: Minimum stretch of polyA segments after a gap
+        min_std: Minimum standard deviation of polyA segments
+        max_std: Maximum standard deviation of polyA segments
+        update_std: Whether to update the standard deviation of polyA segments
+        after the first False position
 
     Returns:
         int: Index where the polyA tail ends. If no valid polyA is found,
@@ -31,29 +42,63 @@ def detect_polya(
     assert np.all(~np.isnan(signal_downsampled)), "signal downsampled contains nan"
 
     # Calculate baseline statistics from initial portion of potential polyA region
-    polya_mean = signal_downsampled[adapter_end_idx : adapter_end_idx + min_len].mean()
-    polya_std = signal_downsampled[adapter_end_idx : adapter_end_idx + min_len].std()
+    signal_post_adapter = signal_downsampled[adapter_end_idx:]
+    polya_mean = signal_post_adapter[:min_len].mean()
+    polya_std = signal_post_adapter[:min_len].std()
+    polya_std = min(max(polya_std, min_std), max_std)
 
-    # Check which points in the signal are within the expected polyA range
-    signal_segment = signal_downsampled[adapter_end_idx:]
-    within_bounds = abs(signal_segment - polya_mean) <= std_scale * polya_std
+    within_bounds = abs(signal_post_adapter - polya_mean) <= zscore * polya_std
 
-    # Find the end of the first continuous segment
-    if len(within_bounds) > 0:
-        changes = np.diff(within_bounds.astype(int)[min_len:])
-        if np.any(changes < 0):  # If there's a transition from True to False
+    # Find the first False position, update statistics
+    first_false_idx = np.where(~within_bounds)[0]
+    if len(first_false_idx) > 0 and update_std:
+        if first_false_idx[0] > min_len:
+            first_false_idx = first_false_idx[0]
 
-            change_indices = np.where(changes < 0)[0]
-            if change_indices[0] < max_len - min_len:
-                polya_end = adapter_end_idx + change_indices[0] + min_len
+            polya_mean = signal_post_adapter[:first_false_idx].mean()
+            polya_std = signal_post_adapter[:first_false_idx].std()
+            polya_std = min(max(polya_std, min_std), max_std)
+
+            within_bounds = abs(signal_post_adapter - polya_mean) <= zscore * polya_std
+
+    # Find valid polyA end allowing for small gaps
+    if len(within_bounds) > min_len:
+        # Convert to int array and get the portion after minimum length
+        signal_after_min = within_bounds.astype(int)[min_len:]
+
+        # Find runs of True and False values
+        run_starts = np.where(np.diff(np.hstack(([0], signal_after_min))))[0]
+        run_values = signal_after_min[run_starts]
+
+        if len(run_starts) > 0:
+            run_lengths = np.diff(np.hstack((run_starts, [len(signal_after_min)])))
+
+            for i in range(len(run_starts)):
+                if run_values[i] == 0:  # Found a gap
+                    gap_length = run_lengths[i]
+
+                    if gap_length > max_gap:
+                        break
+
+                    next_true_idx = i + 1
+                    if (
+                        next_true_idx >= len(run_values)
+                        or run_lengths[next_true_idx] < min_stretch_post_gap
+                    ):
+                        break
             else:
-                polya_end = adapter_end_idx  # no polya detected
-        else:
-            polya_end = adapter_end_idx  # no polya detected
-    else:
-        polya_end = adapter_end_idx  # no polya detected
+                # No break, no invalid gaps found, use the entire sequence
+                i = len(run_starts)
 
-    return polya_end
+            if i > 0:
+                end_pos = (
+                    run_starts[i - 1]
+                    if run_values[i - 1] == 0
+                    else run_starts[i - 1] + run_lengths[i - 1]
+                )
+                return adapter_end_idx + end_pos + min_len
+
+    return adapter_end_idx  # no valid polyA tail detected
 
 
 def detect_rna_start_peak(
@@ -155,8 +200,12 @@ def detect_rna_start_peak(
                     signals_downsampled[i, : end_idx[i]],
                     next_max_idx,
                     spc.rna_start_peak.detect_polya_min_len,
-                    spc.rna_start_peak.detect_polya_max_len,
-                    spc.rna_start_peak.detect_polya_std_scale,
+                    spc.rna_start_peak.detect_polya_zscore,
+                    spc.rna_start_peak.detect_polya_max_gap_len,
+                    spc.rna_start_peak.detect_polya_min_stretch_post_gap,
+                    spc.rna_start_peak.detect_polya_min_std,
+                    spc.rna_start_peak.detect_polya_max_std,
+                    spc.rna_start_peak.detect_polya_update_std,
                 )
                 if (polya_end_idx > next_max_idx) and (
                     signals_downsampled[i, next_max_idx:polya_end_idx].mean()

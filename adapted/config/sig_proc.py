@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Optional, Tuple, Union
 
 import toml
+
 from adapted import models
 from adapted._version import __version__
 from adapted.config import config_files
@@ -117,8 +118,13 @@ class RNAStartPeakConfig(BaseConfig):
     # ### finetuned polya detection ###
     detect_polya: bool = False
     detect_polya_min_len: int = 10  # downscaled
-    detect_polya_max_len: int = 80  # downscaled
-    detect_polya_std_scale: float = 2.5
+    detect_polya_zscore: float = 5.0
+    detect_polya_min_std: float = 1.0
+    detect_polya_max_std: float = 3.0
+    detect_polya_update_std: bool = True
+    detect_polya_min_stretch_post_gap: int = 5  # downscaled
+    detect_polya_max_gap_len: int = 5  # downscaled
+
     # ##############################
 
     fallback_to_llr: bool = False
