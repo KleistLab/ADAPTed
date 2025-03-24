@@ -9,14 +9,15 @@ Contact: w.vandertoorn@fu-berlin.de
 import importlib.resources as pkg_resources
 import logging
 import os
-from dataclasses import dataclass
-from typing import Any, Dict, MutableMapping, Optional, Tuple, Union
+from dataclasses import dataclass, field
+from typing import Any, Dict, Optional, Tuple, Union
 
 import toml
 from adapted import models
 from adapted._version import __version__
 from adapted.config import config_files
-from adapted.config.base import BaseConfig, NestedConfig, load_nested_config_from_file
+from adapted.config.base import (BaseConfig, NestedConfig,
+                                 load_nested_config_from_file)
 
 
 @dataclass
@@ -176,15 +177,15 @@ class StreamingConfig(BaseConfig):
 
 @dataclass
 class SigProcConfig(NestedConfig):
-    core: CoreConfig = CoreConfig()
-    llr_boundaries: LLRBoundariesConfig = LLRBoundariesConfig()
-    mvs_polya: MVSPolyAConfig = MVSPolyAConfig()
-    real_range: RealRangeConfig = RealRangeConfig()
+    core: CoreConfig = field(default_factory=CoreConfig)
+    llr_boundaries: LLRBoundariesConfig = field(default_factory=LLRBoundariesConfig)
+    mvs_polya: MVSPolyAConfig = field(default_factory=MVSPolyAConfig)
+    real_range: RealRangeConfig = field(default_factory=RealRangeConfig)
     streaming: Optional[StreamingConfig] = None
-    cnn_boundaries: CNNBoundariesConfig = CNNBoundariesConfig()
+    cnn_boundaries: CNNBoundariesConfig = field(default_factory=CNNBoundariesConfig)
 
-    med_shift: MedShiftConfig = MedShiftConfig()
-    rna_start_peak: RNAStartPeakConfig = RNAStartPeakConfig()
+    med_shift: MedShiftConfig = field(default_factory=MedShiftConfig)
+    rna_start_peak: RNAStartPeakConfig = field(default_factory=RNAStartPeakConfig)
 
     primary_method: Optional[str] = None
     primary_config: Optional[

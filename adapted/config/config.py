@@ -6,7 +6,7 @@ Contact: w.vandertoorn@fu-berlin.de
 
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from adapted.config.base import NestedConfig
 from adapted.config.file_proc import BatchConfig, InputConfig, OutputConfig
@@ -15,7 +15,7 @@ from adapted.config.sig_proc import SigProcConfig
 
 @dataclass
 class Config(NestedConfig):
-    input: InputConfig = InputConfig()
-    output: OutputConfig = OutputConfig()
-    batch: BatchConfig = BatchConfig()
-    sig_proc: SigProcConfig = SigProcConfig()
+    input: InputConfig = field(default_factory=InputConfig)
+    output: OutputConfig = field(default_factory=OutputConfig)
+    batch: BatchConfig = field(default_factory=BatchConfig)
+    sig_proc: SigProcConfig = field(default_factory=SigProcConfig)
