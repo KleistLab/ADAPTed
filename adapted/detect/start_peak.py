@@ -1,9 +1,10 @@
 import numpy as np
 import pandas as pd
-
+import logging
 from adapted.config.sig_proc import SigProcConfig
 from adapted.detect.downscale import downscale_signal
 
+logging.getLogger().setLevel(logging.DEBUG)
 
 def detect_polya(
     signal_downsampled: np.ndarray,
@@ -42,10 +43,14 @@ def detect_polya(
     assert np.all(~np.isnan(signal_downsampled)), "signal downsampled contains nan"
 
     # Calculate baseline statistics from initial portion of potential polyA region
+    assert type(adapter_end_idx) == np.int64, f"adapter_end_idx must be an integer, but is {adapter_end_idx} ({type(adapter_end_idx)}))"
+    assert type(min_len) == int, f"min_len must be an integer, but is {min_len} ({type(min_len)}))"
+    
     signal_post_adapter = signal_downsampled[adapter_end_idx:]
     polya_mean = signal_post_adapter[:min_len].mean()
     polya_std = signal_post_adapter[:min_len].std()
     polya_std = min(max(polya_std, min_std), max_std)
+    
 
     within_bounds = abs(signal_post_adapter - polya_mean) <= zscore * polya_std
 
@@ -139,11 +144,11 @@ def detect_rna_start_peak(
     offset1 = spc.rna_start_peak.offset1
     start_peak_max_idx = spc.rna_start_peak.start_peak_max_idx
     offset2 = spc.rna_start_peak.offset2
-
+    min_length = spc.core.min_obs_adapter // downscale_factor
     # Adjust signal lengths for downscaling
     end_idx = np.minimum(full_signal_lens, m)
     end_idx = end_idx // downscale_factor
-
+    
     # Downsample signals for faster processing
     signals_downsampled = downscale_signal(batch_of_signals, downscale_factor)
 
@@ -162,6 +167,12 @@ def detect_rna_start_peak(
         try:
             success = True
             fail_reason = ""
+            
+            if end_idx[i] < min_length:
+                success = False
+                fail_reason = "read too short"
+                res.append((success, None, None, None, None, None, None, fail_reason))
+                continue
 
             # Find initial peak in the signal
             max_ = signals_downsampled[i, offset1:start_peak_max_idx].max()
@@ -172,6 +183,12 @@ def detect_rna_start_peak(
             max_ = max(spc.rna_start_peak.min_start_peak_pa, max_)
 
             # Find the next peak that exceeds the initial peak (potential adapter end)
+            if max_idx + offset2 > end_idx[i]:
+                success = False
+                fail_reason = "read too short"
+                res.append((success, None, None, None, None, None, None, fail_reason))
+                continue
+
             next_max_idx = (
                 np.argmax(signals_downsampled[i, max_idx + offset2 : end_idx[i]] > max_)
                 + max_idx
@@ -194,19 +211,25 @@ def detect_rna_start_peak(
                 fail_reason = "adapter med candidate polya mean ratio too low"
 
             polya_end_idx = next_max_idx
-
             if spc.rna_start_peak.detect_polya and success:
-                polya_end_idx = detect_polya(
-                    signals_downsampled[i, : end_idx[i]],
-                    next_max_idx,
-                    spc.rna_start_peak.detect_polya_min_len,
-                    spc.rna_start_peak.detect_polya_zscore,
-                    spc.rna_start_peak.detect_polya_max_gap_len,
-                    spc.rna_start_peak.detect_polya_min_stretch_post_gap,
-                    spc.rna_start_peak.detect_polya_min_std,
-                    spc.rna_start_peak.detect_polya_max_std,
-                    spc.rna_start_peak.detect_polya_update_std,
-                )
+                try:
+                    polya_end_idx = detect_polya(
+                        signal_downsampled=signals_downsampled[i, : end_idx[i]],
+                        adapter_end_idx=next_max_idx,
+                        min_len=spc.rna_start_peak.detect_polya_min_len,
+                        zscore=spc.rna_start_peak.detect_polya_zscore,
+                        max_gap=spc.rna_start_peak.detect_polya_max_gap_len,
+                        min_stretch_post_gap=spc.rna_start_peak.detect_polya_min_stretch_post_gap,
+                        min_std=spc.rna_start_peak.detect_polya_min_std,
+                        max_std=spc.rna_start_peak.detect_polya_max_std,
+                        update_std=spc.rna_start_peak.detect_polya_update_std,
+                    )
+                    assert type(polya_end_idx) == np.int64, f"detected polya_end_idx must be an integer, but is {polya_end_idx} ({type(polya_end_idx)}))"
+                except Exception as e:
+                    logging.debug(f"Error detecting polya: {e}")
+
+                # logging.debug(f"polya_end_idx: {polya_end_idx}")
+                
                 if (polya_end_idx > next_max_idx) and (
                     signals_downsampled[i, next_max_idx:polya_end_idx].mean()
                     < spc.rna_start_peak.adapter_med_polya_mean_scale * adapter_med

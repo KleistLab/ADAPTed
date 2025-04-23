@@ -11,6 +11,7 @@ from copy import deepcopy
 from typing import List, Union
 
 import numpy as np
+import logging
 from adapted.config.sig_proc import SigProcConfig
 from adapted.container_types import Boundaries, DetectResults
 from adapted.detect.anomalies import find_open_pores
@@ -337,15 +338,16 @@ def combined_detect_start_peak(
     for signal, full_signal_len in zip(batch_of_signals, full_signal_lens):
         res = df_res.iloc[read_i]
 
-        # Create initial boundaries from start peak detection
-        boundaries = Boundaries(
-            adapter_start=0,
-            adapter_end=res.next_greater_idx,  # Adapter end is where signal exceeds start peak
-            polya_end=res.polya_end_idx,
-            polya_end_topk=np.array([res.polya_end_idx]),
-        )
-
         try:
+            # Create initial boundaries from start peak detection
+            boundaries = Boundaries(
+                adapter_start=0,
+                adapter_end=int(res.next_greater_idx),  # Adapter end is where signal exceeds start peak
+                polya_end=int(res.polya_end_idx),
+                polya_end_topk=np.array([int(res.polya_end_idx)]),
+            )
+
+
             # Validate detected boundaries against configuration parameters
             detect_res = validate_boundaries(
                 signal[:full_signal_len],
@@ -399,6 +401,7 @@ def combined_detect_start_peak(
 
         except Exception as e:
             # Handle any unexpected errors during processing
+            logging.debug(f"Error in combined_detect_start_peak: {e}, full_signal_len: {full_signal_len}, boundaries: {boundaries}")
             list_of_detect_res.append(DetectResults(success=False, fail_reason=str(e)))
 
         read_i += 1
@@ -481,6 +484,8 @@ def validate_boundaries(
                 fail_reason = "Open pore too close to boundary"
 
     if success and spc.real_range.real_signal_check:
+        assert adapter_start is not None and adapter_end is not None, f"adapter_start: {adapter_start}, adapter_end: {adapter_end}"
+        
         (
             real_adapter_succes,
             real_adapter_mean_start,
