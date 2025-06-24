@@ -11,7 +11,7 @@ Note: due to a naming conflict, the tool has been renamed from ADAPT to ADAPTed.
 To install ADAPTed, the conda/mamba environment must be installed first. To do so, you can run the following commands:
 
 ```
-git clone https://github.com/wvandertoorn/ADAPTed.git
+git clone https://github.com/KleistLab/ADAPTed.git
 cd ADAPTed
 mamba env create -f environment.yml
 conda activate ADAPTed
