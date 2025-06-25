@@ -59,3 +59,12 @@ start_peak_max_idx = 150
 offset1 = 10
 offset2 = 100
 open_pore_pa = 195.0
+
+detect_polya = false
+detect_polya_min_len = 10  # downscaled
+detect_polya_zscore = 5.0
+detect_polya_min_std = 1.0
+detect_polya_max_std = 3.0
+detect_polya_update_std = true
+detect_polya_min_stretch_post_gap = 5  # downscaled
+detect_polya_max_gap_len = 5  # downscaled
